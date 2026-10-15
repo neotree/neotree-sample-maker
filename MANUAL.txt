@@ -1,0 +1,2151 @@
+================================================================================
+  NEOTREE SAMPLE MAKER -- COMPLETE MANUAL
+================================================================================
+
+  A single-file compilation of every documentation file shipped with the
+  Neotree Sample Maker.
+
+  Version   : 2.0.0  (see CHANGELOG.md)
+  Source    : the README and documentation files in this repository,
+              reproduced here in full.
+
+================================================================================
+ABOUT THIS MANUAL
+================================================================================
+
+This file exists so that the whole documentation set can be read, searched
+and printed as one document. Each section below is the verbatim content of
+a README file that also ships in its own folder, so the two never disagree:
+if you prefer to read documentation next to the code, open the README in the
+relevant folder instead.
+
+WHAT THIS REPOSITORY DOES
+================================================================================
+
+The sample maker is the second stage of a two-stage workflow:
+
+  1. neotree-cleaning-pipeline   Takes raw Neotree exports and produces
+     (separate repository)       cleaned, validated, dictionary-conformant
+                                 datasets.
+
+  2. neotree-sample-maker        Joins cleaned admissions to discharges,
+     (this repository)           builds master datasets, and cuts
+                                 analysis-ready subsamples for specific
+                                 data requests.
+
+The cleaning pipeline lives at:
+  https://github.com/neotree/neotree-cleaning-pipeline
+
+The two are loosely coupled. This repository reads whatever cleaned datasets
+it finds in its own input/ folder and knows nothing about how they were
+produced beyond the directory naming convention -- so it can equally be run
+against an archived extract or a fresh pipeline run. Section 1.2 documents
+what belongs in input/.
+
+A normal run is: copy cleaned datasets into input/, run run_all.R to build
+the master joined datasets, then run run_subsample_maker.R to cut the subset
+a particular data request needs.
+
+SCOPE OF THIS DOCUMENTATION
+================================================================================
+
+This manual documents the CODE ONLY -- what each module does and how to run
+it. It contains no Neotree study data and no catalogue of data-quality
+findings; those are maintained separately by the Neotree team and are not
+distributed with this repository.
+
+Note that this tool joins and subsets whatever it is given: it does not
+re-clean its inputs. Any characteristic of the cleaned datasets placed in
+input/ carries straight through to the subsamples cut here.
+
+HOW TO NAVIGATE
+================================================================================
+
+Every section begins with a banner line of equals signs followed by its
+number and title, so you can jump between sections by searching for the
+section number (for example "4.6") or for the banner character sequence.
+
+Files not reproduced here
+  config_subsample_TEMPLATE.R is the fully annotated configuration
+  reference. It is a commented R file rather than prose documentation, so it
+  is not included here -- open it directly when configuring a data request.
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+
+PART I -- OVERVIEW AND SETUP
+  1.1   Sample maker -- full pipeline documentation
+  1.2   input/ -- what to copy and how it should be laid out
+
+PART II -- ENTRY POINTS
+  2.1   run_all.R -- batch runner
+  2.2   run_sample_maker.R -- Pipeline 1 (join admissions to discharges)
+  2.3   run_subsample_maker.R -- Pipeline 2 (subsample creation)
+  2.4   run_anonymizer.R -- de-identification utility
+  2.5   run_data_profiler.R -- variable profiling utility
+  2.6   Master dataset files
+
+PART III -- CONFIGURATION
+  3.1   config_sample_maker.R -- Pipeline 1 configuration
+  3.2   config_subsample_maker.R -- Pipeline 2 configuration
+
+PART IV -- MODULE REFERENCE
+  4.1   file_finder.R -- locate input files
+  4.2   loader.R -- load and validate data
+  4.3   filter_data.R -- date and facility filtering
+  4.4   deduplicator.R -- resolve duplicate keys
+  4.5   joiner.R -- direct uid + facility matching
+  4.6   prob_matcher.R -- probabilistic matching engine
+  4.7   master_builder.R -- assemble master datasets
+  4.8   output_writer.R -- write outputs and reports
+  4.9   subsample_maker.R -- filtering and column selection
+  4.10  anonymizer.R -- de-identification module
+
+
+
+################################################################################
+#
+#  PART I -- OVERVIEW AND SETUP
+#
+################################################################################
+
+
+================================================================================
+  1.1  Sample maker -- full pipeline documentation
+================================================================================
+  Source file: README_files/README_PIPELINE.txt
+================================================================================
+
+================================================================================
+  Neotree Sample Maker -- Overview of the scripts
+================================================================================
+
+PURPOSE
+-------
+Describes how the scripts fit together, where files are read and written, how
+output files are named, and the data package workbook. Each script and config
+file has its own README in this folder; each module has one in modules/.
+
+
+WORKFLOW
+--------
+  1. Place the cleaned datasets in input/                  input/README.md
+  2. Build the master datasets
+       all pairs in input/         run_all.R               ../README_run_all.txt
+       one country and source      run_sample_maker.R      README_run_sample_maker.txt
+  3. Cut a subsample               run_subsample_maker.R   README_run_subsample_maker.txt
+  4. Optional:
+       data package workbook       run_subsample_user_dict.R   this file
+       remove identifiers          run_anonymizer.R        README_run_anonymizer.txt
+       profile any CSV             run_data_profiler.R     README_run_data_profiler.txt
+
+Step 3 in cleaned mode reads the cleaned datasets directly and does not need
+step 2.
+
+
+SCRIPTS AND THEIR SETTINGS
+--------------------------
+  Script                      Settings
+  --------------------------  ------------------------------------------------
+  run_all.R                   config_sample_maker.R; RUN_ALL_FILTER and
+                              RUN_ALL_SKIP in the script
+  run_sample_maker.R          config_sample_maker.R, or a file given as the
+                              first argument
+  run_subsample_maker.R       SUBSAMPLE_CONFIG block in the script, or a file
+                              given as the first argument;
+                              INCLUDE_METABASE in the script
+  run_subsample_user_dict.R   DICT_CONFIG block in the script, or a file
+                              given as the first argument
+  run_anonymizer.R            ANONYMIZER_CONFIG block in the script
+  run_data_profiler.R         PROFILER_CONFIG block in the script; the input
+                              file may be given as the first argument
+
+
+FOLDERS
+-------
+  input/{country}_{src}_{dataset}_{date}/     cleaned datasets
+  input/{...}/profiles/                       profiles written by run_all.R
+  outputs/{country}_master/{source}/          master datasets and reports
+  outputs/{country}_master/{source}/profiles/ profiles of inputs and masters
+  subsamples/                                 subsample files (default)
+  subsamples/profiles/                        subsample profiles
+  user_dictionaries/                          neotree_user_dict_zim.xlsx and
+                                              neotree_user_dict_mwi.xlsx
+  modules/                                    functions sourced by the scripts
+
+{src} is db or mb in input names; {source} is from_database or from_metabase
+in output folders.
+
+
+FILE NAMES
+----------
+Output names have the form {prefix}_{content}_{label}.
+
+  {prefix}   Country in upper case, underscore, source code: ZIM_db, MWI_mb.
+
+  {label}    Built from the filter settings:
+
+               Start and end date        20250101_to_20260131
+               End date only             to_20260131
+               Start date only           from_20250101
+               No date                   ALL
+               Facility filter           facility names appended, joined by _.
+                                         With no date, the join and master
+                                         mode give the facility names alone;
+                                         cleaned mode gives ALL and the names.
+               Per-facility ranges       earliest start, latest end, then the
+                                         facility names. Cleaned mode uses
+                                         the global dates and no names.
+               Exclusion filters set     _excl appended     (subsamples only)
+               Column list set           _{n}vars appended  (subsamples only)
+
+             Example: 20250101_to_20260131_FACILITY_A_excl_12vars
+
+
+DATA PACKAGE WORKBOOK  (run_subsample_user_dict.R)
+--------------------------------------------------
+Purpose
+  Writes one Excel workbook that lists, for each subsample file, the
+  dictionary entry of every variable beside counts and summary statistics
+  computed from the file. Needs the openxlsx package.
+
+What it does
+  1. Finds the subsample files, from subsample_files or by scanning
+     subsample_dir.
+  2. Loads each file and profiles every column with the rules of the data
+     profiler (README_run_data_profiler.txt).
+  3. Reads the matching sheet of neotree_user_dict_{country}.xlsx: Admissions,
+     Discharges, Neolab, Master, and for maternal files Maternal Outcomes
+     (zim) or combined_maternity_outcomes (mwi). If the workbook or the sheet
+     is missing, the dataset sheet is built from the profile alone.
+  4. Matches dictionary variables to data columns by name, ignoring case, and
+     failing that ignoring underscores as well.
+  5. Writes the workbook.
+
+Workbook sheets
+  About        Study name, country, time of the run, and for each dataset
+               sheet the source file name with its row and column counts.
+  Admissions, Discharges, Master, Neolab, Maternal
+               One sheet per dataset type found. Columns: Description,
+               Variable Name, Type, Values / Codes, n present, Missing %,
+               Statistics, NA Codes. Rows follow the dictionary order, with
+               the dictionary's section headings. Dictionary variables absent
+               from the file have empty count and statistics cells. Columns
+               of the file that are not in the dictionary follow under
+               "Pipeline / System Variables" or "Additional Variables (not in
+               current dictionary version)". Missing % above 10 is shown in
+               red.
+  NA Codes     Legend of the numeric codes -6 to -9 used in na_coded files
+               and of the text codes used on the forms.
+
+  Statistics shows range, mean and median for numeric variables, TRUE and
+  FALSE counts for boolean variables, and the three most frequent values with
+  their counts for categorical variables.
+
+Settings (DICT_CONFIG)
+  study_name            Text shown on the About sheet.
+  country               "zim" or "mwi". NULL takes it from the first file
+                        name: ZIM_ or MWI_ at the start.
+  subsample_dir         Folder to scan for files whose names contain
+                        _subsample_ and end in .csv. The dataset type is read
+                        from the name: admissions, discharges, neolab,
+                        maternal or master. Of the master-mode files only
+                        {prefix}_subsample_master_{label}.csv is used. When
+                        several files have the same type the first is kept.
+  subsample_files       Named list, type = path. When it is not empty it is
+                        used and subsample_dir is not scanned.
+  user_dict_dir         Folder with the dictionary workbooks. Default
+                        "user_dictionaries". The run stops if the folder does
+                        not exist.
+  output_dir            Folder for the workbook. NULL uses subsample_dir, or
+                        the folder of the first file.
+  numeric_threshold     As in the data profiler.
+  max_numeric_distinct  As in the data profiler.
+
+  Relative paths are resolved against the script folder.
+
+Output
+  {prefix}_data_package_{label}.xlsx, with {prefix} and {label} taken from the
+  name of the first subsample file. An existing file of that name is
+  overwritten.
+
+How to run
+  Rscript run_subsample_user_dict.R
+  Rscript run_subsample_user_dict.R my_dict_config.R
+
+  The config file must define DICT_CONFIG. In RStudio, a DICT_CONFIG object
+  already in the session is used instead of the block in the script.
+
+
+REQUIREMENTS
+------------
+Base R for every script except run_subsample_user_dict.R, which needs
+openxlsx. rstudioapi is used, if installed, to find the script folder when a
+script is sourced in RStudio. install_packages.r installs both from CRAN;
+install_packages_mirror.r installs them from an internal package mirror.
+
+
+================================================================================
+  1.2  input/ -- what to copy and how it should be laid out
+================================================================================
+  Source file: input/README.md
+================================================================================
+
+# `input/`: cleaned datasets
+
+The sample maker reads its input from this folder. The input is the output of the Neotree cleaning pipeline (`neotree-cleaning-pipeline`).
+
+## Layout
+
+Copy the cleaning pipeline's dataset folders into `input/` with their names unchanged, one folder per dataset:
+
+```
+input/
+├── zim_db_admissions_2026-01-31/
+│   ├── zim_db_admissions_2026-01-31_cleaned.csv
+│   └── zim_db_admissions_2026-01-31_cleaned_na_coded.csv
+├── zim_db_discharges_2026-01-31/
+│   ├── zim_db_discharges_2026-01-31_cleaned.csv
+│   └── zim_db_discharges_2026-01-31_cleaned_na_coded.csv
+└── zim_db_neolab_2026-01-31/
+    └── zim_db_neolab_2026-01-31_cleaned.csv
+```
+
+Folder names follow `{country}_{source}_{dataset}_{date}`:
+
+| Part | Values |
+|------|--------|
+| `country` | `zim`, `mwi` |
+| `source` | `db`, `mb` |
+| `dataset` | `admissions`, `discharges`, `neolab`, `maternal_outcomes`, `combined_maternity_outcomes`, or any other dataset name |
+| `date` | `YYYYMMDD`, `YYYYMMDDHHMM` or `YYYY-MM-DD` |
+
+Each folder holds a file with the same name plus `_cleaned.csv`. The `_cleaned_na_coded.csv` file is optional; it is read only when `output_na_coded = TRUE`.
+
+When several folders match the same country, source and dataset, the most recently modified `_cleaned.csv` file is used and a warning is shown.
+
+`run_all.R` writes a `profiles/` folder inside each dataset folder.
+
+## Reading another folder
+
+To read the cleaned datasets from another location, set `cleaning_pipeline_output_dir` in `config_sample_maker.R` (and in the subsample config for cleaned mode) to that folder.
+
+## Version control
+
+`.gitignore` excludes everything in this folder except this file.
+
+
+
+################################################################################
+#
+#  PART II -- ENTRY POINTS
+#
+################################################################################
+
+
+================================================================================
+  2.1  run_all.R -- batch runner
+================================================================================
+  Source file: README_run_all.txt
+================================================================================
+
+================================================================================
+  Neotree Sample Maker -- run_all.R
+================================================================================
+
+PURPOSE
+-------
+Builds the master datasets for every admissions and discharges pair found in
+the input folder, in one run.
+
+
+WHEN IT RUNS
+------------
+After the cleaned datasets have been placed in input/ (see input/README.md).
+It replaces separate runs of run_sample_maker.R for each country and source.
+
+
+WHAT IT DOES
+------------
+1. Reads config_sample_maker.R from the script folder.
+
+2. Lists the subfolders of the input folder and reads each name as
+   {country}_{source}_{dataset}_{date}:
+
+     country   zim | mwi
+     source    db | mb
+     dataset   any text
+     date      YYYYMMDD, YYYYMMDDHHMM or YYYY-MM-DD
+
+   Matching ignores case. Folders whose names do not fit are listed as
+   skipped.
+
+3. Groups the folders by country and source. A group that has both an
+   admissions folder and a discharges folder gives one join run. Folders of
+   any other dataset type are listed as skipped; run_subsample_maker.R in
+   cleaned mode reads those.
+
+4. Prints the run plan. If there is no join run, the script stops here.
+
+5. Profiles every CSV file under the input folder, at any depth, except files
+   inside a profiles/ folder and files ending in _variable_profile.csv. The
+   two profile files for each CSV are written to a profiles/ folder beside
+   it. A file that cannot be profiled gives a warning and the run continues.
+
+6. For each join run, carries out the steps of run_sample_maker.R (see
+   README_files/README_run_sample_maker.txt) with country and source set from
+   the folder names. When output_na_coded is TRUE it also loads the
+   _cleaned_na_coded.csv files and writes the na_coded master files; if
+   either na_coded file is missing, the na_coded master files are not written.
+
+7. An error in one join run is reported and the next run starts. A summary of
+   succeeded and failed runs is printed at the end.
+
+
+INPUTS
+------
+  config_sample_maker.R        Date window, matching and output settings.
+                               country and source are replaced for each run.
+  Input folder                 cleaning_pipeline_output_dir from the config.
+                               A relative path is resolved against the script
+                               folder.
+
+
+OUTPUTS
+-------
+  outputs/{country}_master/{source}/      Files of one join run, as listed in
+                                          README_files/README_run_sample_maker.txt.
+                                          source is from_database or
+                                          from_metabase.
+  outputs/{country}_master/{source}/profiles/
+                                          Profiles of the two cleaned inputs
+                                          and the two master datasets.
+  {input folder}/{dataset}/profiles/      Profiles of the cleaned input files.
+
+Outputs always go to the outputs/ folder beside the script; output_dir in the
+config is not used by run_all.R.
+
+
+SETTINGS
+--------
+Two objects near the top of run_all.R:
+
+  RUN_ALL_FILTER   NULL, or a regular expression. Only input folders whose
+                   name matches it are considered. Matching ignores case.
+                   Example: "^zim_" keeps folders that start with zim_.
+
+  RUN_ALL_SKIP     Character vector of exact folder names to leave out.
+
+All other settings come from config_sample_maker.R (see
+README_files/README_config_sample_maker.txt) and apply to every join run.
+
+
+HOW TO RUN
+----------
+  Rscript run_all.R
+
+or open the file in RStudio and click Source. The script takes no arguments.
+
+
+================================================================================
+  2.2  run_sample_maker.R -- Pipeline 1 (join admissions to discharges)
+================================================================================
+  Source file: README_files/README_run_sample_maker.txt
+================================================================================
+
+================================================================================
+  Neotree Sample Maker -- run_sample_maker.R
+================================================================================
+
+PURPOSE
+-------
+Joins the cleaned admissions file and the cleaned discharges file of one
+country and source, and writes the master datasets and matching reports.
+
+
+WHEN IT RUNS
+------------
+After the cleaned datasets are in the input folder. run_all.R carries out the
+same steps for every country and source it finds.
+
+
+WHAT IT DOES
+------------
+  Step  Action                                           Module
+  ----  -----------------------------------------------  ------------------
+   1    Find the admissions and discharges files         file_finder.R
+   2    Load both files and check required columns       loader.R
+   3    Parse datetimeadmission                          filter_data.R
+   4    Resolve the admission date window                filter_data.R
+   5    Keep admissions inside the window                filter_data.R
+   6    Look for duplicate keys in each file             deduplicator.R
+   7    Join on uid + facility                           joiner.R
+   8    Build master_joined                              master_builder.R
+   9    Choose the variables for probabilistic matching  prob_matcher.R
+  10    Score unmatched admissions against unmatched
+        discharges and accept one-to-one pairs           prob_matcher.R
+  11    Build master_joined_extended                     master_builder.R
+  12    Write CSV files and reports                      output_writer.R
+  13    Profile the two cleaned inputs and the two
+        master datasets                                  data_profiler.R
+
+Each module has a README in modules/. Discharges are not filtered by date:
+every discharge record is available for matching.
+
+Step 9 measures completeness on the files as loaded, before the date filter.
+
+
+INPUTS
+------
+  Config file     First command-line argument if given; otherwise
+                  config_sample_maker.R beside the script; otherwise config.R
+                  beside the script. See README_config_sample_maker.txt.
+  Cleaned files   {country}_{src}_admissions_{date}_cleaned.csv and
+                  {country}_{src}_discharges_{date}_cleaned.csv, each in a
+                  folder of the same name under cleaning_pipeline_output_dir.
+
+Required columns: uid, facility and datetimeadmission in admissions; uid and
+facility in discharges.
+
+
+OUTPUTS
+-------
+Written to {output_dir}/{country}_master/{source}/. {prefix} is the country in
+upper case and the source code, for example ZIM_db. {label} describes the date
+window, for example to_20260131 (see README_PIPELINE.txt).
+
+  {prefix}_master_joined_{label}.csv
+  {prefix}_master_joined_extended_{label}.csv
+  {prefix}_joined_admissions_discharges_{label}.csv
+  {prefix}_joined_admissions_discharges_extended_{label}.csv
+  {prefix}_unmatched_admissions_{label}.csv
+  {prefix}_unmatched_discharges_{label}.csv
+  {prefix}_prob_match_candidates_{label}.csv     only if candidates were found
+  {prefix}_prob_match_assignments_{label}.csv    only if pairs were accepted
+  {prefix}_duplicates_log.csv                    only if duplicates were found
+  {prefix}_matching_statistics_{label}.txt
+  {prefix}_prob_matching_report_{label}.txt
+  {prefix}_pipeline_log_{label}.txt              the two reports in one file
+  profiles/{prefix}_cleaned_admissions_{label}_variable_profile.csv / .txt
+  profiles/{prefix}_cleaned_discharges_{label}_variable_profile.csv / .txt
+  profiles/{prefix}_master_joined_{label}_variable_profile.csv / .txt
+  profiles/{prefix}_master_joined_extended_{label}_variable_profile.csv / .txt
+
+The contents of the data files are described in README_master_dataset.txt
+and the reports in modules/README_output_writer.txt.
+
+run_sample_maker.R does not load the _cleaned_na_coded.csv files, so it does
+not write the na_coded master files. run_all.R does.
+
+A relative output_dir is taken from the working directory.
+
+
+HOW TO RUN
+----------
+  Rscript run_sample_maker.R
+  Rscript run_sample_maker.R path/to/my_config.R
+
+or open the file in RStudio and click Source. The script returns the list of
+output paths invisibly.
+
+
+================================================================================
+  2.3  run_subsample_maker.R -- Pipeline 2 (subsample creation)
+================================================================================
+  Source file: README_files/README_run_subsample_maker.txt
+================================================================================
+
+================================================================================
+  Neotree Sample Maker -- run_subsample_maker.R
+================================================================================
+
+PURPOSE
+-------
+Cuts a subsample by date, facility, exclusion rules and column list. It reads
+either the master datasets (master mode) or cleaned files (cleaned mode).
+
+
+WHEN IT RUNS
+------------
+Master mode runs after run_all.R or run_sample_maker.R has written the master
+datasets. Cleaned mode needs only the cleaned datasets in the input folder.
+
+
+HOW THE SETTINGS ARE SUPPLIED
+-----------------------------
+The settings are one list named SUBSAMPLE_CONFIG (see
+README_config_subsample_maker.txt). The script takes it from:
+
+  1. a file given as the first command-line argument, or named in a session
+     variable SUBSAMPLE_CONFIG_FILE. The path is tried as given and then under
+     the working directory;
+  2. otherwise, a SUBSAMPLE_CONFIG object already in the R session;
+  3. otherwise, the block inside run_subsample_maker.R.
+
+config_subsample_maker.R and the templates are not read unless passed in this
+way.
+
+INCLUDE_METABASE, near the top of the script, is FALSE by default. While it is
+FALSE, a config with source = "from_metabase" stops the run, in either mode.
+
+
+MASTER MODE  (source_type = "master")
+-------------------------------------
+The same steps are applied to master_joined and to master_joined_extended.
+
+1. Dates. adm_date_parsed is parsed again from datetimeadmission.
+
+2. Date and facility filter.
+   Simple mode: keeps rows with an admission date from sub_start_date to
+   sub_end_date, both inclusive, and a facility in sub_facility_filter. A
+   setting that is NULL is not applied. When either date is set, rows with no
+   parsable admission date are dropped.
+   Advanced mode: keeps, for each entry of sub_facility_date_ranges, the rows
+   of that facility inside its range. Each entry needs both dates. If a
+   uid and facility pair is selected more than once, the first row is kept.
+   The run stops if no row is left.
+
+3. Exclusion filters. Each filter removes the rows that meet its condition.
+   Rows where the variable is missing are kept. When the filter value is a
+   number the column is compared as numbers, otherwise as text. A filter on a
+   column that does not exist is skipped and reported. An unknown operator
+   stops the run.
+
+4. Column selection. With sub_variables set, the output keeps those columns
+   and the columns uid, facility, uniquekey, datetimeadmission, match_key,
+   adm_date_parsed, match_type and prob_match_similarity, in their original
+   order. Requested names that do not exist are reported and skipped.
+
+5. Matched-only files. subsample_master_matched_only is the direct_match rows
+   of the master subsample; subsample_master_extended_matched_only is the
+   direct_match and prob_match rows of the extended subsample.
+
+6. NA-coded files. With output_na_coded = TRUE, the script looks for a file
+   named like each master file with _na_coded before .csv. If both exist, it
+   writes an na_coded copy of each of the four subsample files, holding the
+   same rows taken from the na_coded master files. Column selection is not
+   applied to these copies. If either file is missing they are not written.
+
+7. Profile of the master subsample.
+
+Outputs, in output_dir. {prefix} is the part of the master_joined file name
+before _master_joined.
+
+  {prefix}_subsample_master_{label}.csv
+  {prefix}_subsample_master_extended_{label}.csv
+  {prefix}_subsample_master_matched_only_{label}.csv
+  {prefix}_subsample_master_extended_matched_only_{label}.csv
+  the same four names ending in _na_coded.csv           (step 6)
+  {prefix}_subsample_report_{label}.txt
+  profiles/{prefix}_subsample_master_{label}_variable_profile.csv / .txt
+
+The report lists the input files, the filter, rows kept and dropped with a
+breakdown by match_type, the rows removed by each exclusion filter, the column
+selection, counts by facility, the matched-only counts, the distribution of
+neotreeoutcome among matched rows, and the output files.
+
+
+CLEANED MODE  (source_type = "cleaned")
+---------------------------------------
+Each dataset type with include = TRUE is processed on its own: admissions,
+discharges, neolab, maternal. The file is found under
+cleaning_pipeline_output_dir by country, source and dataset name; maternal
+means maternal_outcomes for zim and combined_maternity_outcomes for mwi. A
+type whose file is not found is skipped, and the others still run. The run
+stops if no type is enabled.
+
+1. Effective settings. sub_start_date, sub_end_date, sub_variables and
+   sub_exclusion_filters set inside the dataset entry replace the global ones
+   for that type. sub_end_date_offset_months then moves the end date by that
+   number of calendar months.
+
+2. Date and facility filter, on the type's date_column.
+   Simple mode: keeps rows dated from the start date to the end date, both
+   inclusive. Rows whose date is missing or cannot be read are kept. Then
+   keeps the facilities in sub_facility_filter.
+   Advanced mode (sub_use_advanced_mode = TRUE with a non-empty
+   sub_facility_date_ranges): keeps, for each entry, the rows of that facility
+   inside its range. A date given as NA leaves that side open. Rows with no
+   date are kept only by an entry with both sides open.
+   With date_column = NULL no date filter is applied and sub_facility_filter
+   is still applied. With a date_column that is not in the file, neither the
+   date filter nor the facility filter is applied.
+   Dates are read as YYYY-MM-DD, YYYYMMDD, or a date-time that starts with
+   YYYY-MM-DD.
+
+3. Exclusion filters. As in master mode, except that values are compared as
+   they are read, without conversion to numbers, and a filter with an unknown
+   operator is skipped.
+
+4. Column selection. With a column list, the output keeps the mandatory
+   columns of the type, the date column, and the listed columns:
+
+     admissions   uid, facility, uniquekey, datetimeadmission
+     discharges   uid, facility, uniquekey
+     neolab       uid, facility, uniquekey, datebct, and nuid if present
+     maternal     uid, facility, uniquekey, dateadmission
+
+5. NA-coded file. With output_na_coded = TRUE the script reads the type's
+   _cleaned_na_coded.csv file and writes the rows at the same positions as
+   the rows kept above, with all columns of that file. If the file is not
+   found the na_coded output is skipped.
+
+6. Profile of the subsample.
+
+Outputs, in output_dir. {prefix} is the country in upper case and the source
+code, for example ZIM_db.
+
+  {prefix}_subsample_{type}_{label}.csv
+  {prefix}_subsample_{type}_{label}_na_coded.csv        (step 5)
+  {prefix}_subsample_{type}_{label}_report.txt
+  profiles/{prefix}_subsample_{type}_{label}_variable_profile.csv / .txt
+
+Missing values (NA in R) are written as the text NA in the cleaned-mode CSV
+files and as empty cells in the master-mode standard files.
+
+The report lists the row counts after each step, the date window and any date
+window note, the facility filter, the exclusion filters, the column selection,
+counts by facility (up to 20), value counts (up to 10 values) for bcresult,
+bctype, org1, neotreeoutcome, matoutcome, modedelivery, typebirth and gender
+where present, and the output files.
+
+
+HOW TO RUN
+----------
+  Rscript run_subsample_maker.R config_subsample_mystudy.R
+  Rscript run_subsample_maker.R
+
+To build a data package covering joined and standalone files, run once with a
+master-mode config and once with a cleaned-mode config that share one
+output_dir, then run run_subsample_user_dict.R on that folder.
+
+
+================================================================================
+  2.4  run_anonymizer.R -- de-identification utility
+================================================================================
+  Source file: README_files/README_run_anonymizer.txt
+================================================================================
+
+================================================================================
+  Neotree Sample Maker -- run_anonymizer.R
+================================================================================
+
+PURPOSE
+-------
+Removes identifier columns from one or more CSV files and writes a copy of
+each file with the suffix _anon.
+
+
+WHEN IT RUNS
+------------
+On demand, on any CSV written by the other scripts.
+
+
+WHAT IT DOES
+------------
+For each input file the script loads the CSV, calls anonymize_dataset() from
+modules/anonymizer.R, and writes the result. The rules are in
+modules/README_anonymizer.txt. In short:
+
+  - uid, uniquekey, match_key and adm_date_parsed are removed;
+  - the columns named in additional_remove are removed;
+  - with convert_datetimes = TRUE, datetimeadmission and datetimedischarge
+    are replaced by adm_yearmonth and dis_yearmonth (YYYY-MM);
+  - with add_anon_id = TRUE, a column anon_id numbering the rows from 1 is
+    added as the first column.
+
+Columns are matched by exact name. Copies that carry the _dis suffix in the
+master datasets, such as uid_dis, are removed only if they are listed in
+additional_remove.
+
+
+SETTINGS
+--------
+ANONYMIZER_CONFIG, inside run_anonymizer.R:
+
+  input_files         Character vector of CSV paths. A path that does not
+                      exist as given is looked for under the script folder.
+                      The run stops if a file is not found or the vector is
+                      empty.
+  output_dir          NULL writes each output beside its input. A folder path
+                      writes all outputs there; the folder is created if
+                      needed.
+  add_anon_id         TRUE or FALSE.
+  convert_datetimes   TRUE or FALSE.
+  additional_remove   Character vector of further column names to remove.
+                      Names not present in a file give a warning.
+
+
+OUTPUTS
+-------
+  {input file name}_anon.csv    One per input file.
+  anonymization_report.txt      One per run, in output_dir, or beside the
+                                first input file when output_dir is NULL. It
+                                lists the settings, the columns removed and
+                                converted, and for each file the row count and
+                                the column counts before and after.
+
+Missing values (NA in R) are written as the text NA.
+
+
+HOW TO RUN
+----------
+Edit ANONYMIZER_CONFIG, then:
+
+  Rscript run_anonymizer.R
+
+or open the file in RStudio and click Source.
+
+
+================================================================================
+  2.5  run_data_profiler.R -- variable profiling utility
+================================================================================
+  Source file: README_files/README_run_data_profiler.txt
+================================================================================
+
+================================================================================
+  Neotree Sample Maker -- run_data_profiler.R and modules/data_profiler.R
+================================================================================
+
+PURPOSE
+-------
+Writes a profile of a CSV file: one row per column with its type, missingness
+and summary statistics, as a CSV and as a text report.
+
+
+WHEN IT RUNS
+------------
+run_data_profiler.R is run on demand on any CSV file. The other scripts
+produce the same profile through profile_and_write() in
+modules/data_profiler.R:
+
+  run_all.R               every CSV in the input folder; the two cleaned
+                          inputs and the two master datasets of each join
+  run_sample_maker.R      the two cleaned inputs and the two master datasets
+  run_subsample_maker.R   the master subsample, or each cleaned-mode subsample
+
+
+WHAT IT DOES
+------------
+A value is missing when it is NA, or, in a text column, empty or made of
+spaces only.
+
+Column type:
+
+  boolean       The column is read by R as logical (TRUE/FALSE).
+  numeric       Not boolean, at least one value present, the share of present
+                values that convert to a number is at least numeric_threshold,
+                and the number of distinct values is at most
+                max_numeric_distinct.
+  categorical   Everything else.
+
+Columns of the profile CSV:
+
+  All types     variable, type, n_total, n_present, n_missing, pct_missing,
+                n_distinct, sample_values (the three most frequent values,
+                separated by " | ")
+  numeric       min, max, mean, median, sd (rounded to 4 decimals),
+                mode_value (most frequent value)
+  boolean       n_true, n_false, pct_true (share of present values)
+  categorical   top1_value, top1_n, top2_value, top2_n, top3_value, top3_n
+
+Fields that do not apply to a column's type are empty.
+
+The text report has a header (source, rows, column counts by type), one table
+for each type, and a list of the columns with missing values in descending
+order of pct_missing.
+
+
+SETTINGS
+--------
+PROFILER_CONFIG, inside run_data_profiler.R:
+
+  input_file             Path of the CSV to profile. Replaced by the first
+                         command-line argument when one is given; that path
+                         is tried as given and then under the script folder.
+  output_dir             NULL writes beside the input file. Otherwise the
+                         folder to write to; it is created if needed.
+  numeric_threshold      Default 0.90.
+  max_numeric_distinct   Default 500.
+
+
+OUTPUTS
+-------
+  {input file name}_variable_profile.csv
+  {input file name}_variable_profile.txt
+
+
+FUNCTION
+--------
+profile_and_write(df, out_path_base, numeric_threshold = 0.90,
+                  max_numeric_distinct = 500, source_label = NULL,
+                  quiet = FALSE)
+
+Profiles the data frame df and writes {out_path_base}_variable_profile.csv and
+{out_path_base}_variable_profile.txt, creating the folder if needed.
+source_label is the name shown in the report header; the default is the last
+part of out_path_base. quiet = TRUE suppresses console messages. Returns,
+invisibly, a list with the two paths, csv and txt.
+
+
+HOW TO RUN
+----------
+  Rscript run_data_profiler.R path/to/file.csv
+
+or set input_file in PROFILER_CONFIG and run the script without arguments.
+
+
+================================================================================
+  2.6  Master dataset files
+================================================================================
+  Source file: README_files/README_master_dataset.txt
+================================================================================
+
+================================================================================
+  Neotree Sample Maker -- Contents of the master dataset files
+================================================================================
+
+PURPOSE
+-------
+Describes what each data file written by the join (run_all.R,
+run_sample_maker.R) contains, and the matching files written by
+run_subsample_maker.R in master mode. File naming is described in
+README_PIPELINE.txt.
+
+
+ROWS
+----
+One row is one admission, except in unmatched_discharges, where one row is one
+discharge.
+
+  File                                    Rows
+  --------------------------------------  ------------------------------------
+  master_joined                           Every admission in the date window.
+                                          Discharge columns are filled for
+                                          direct matches and empty otherwise.
+  master_joined_extended                  The same admissions. Discharge
+                                          columns are filled for direct and
+                                          probabilistic matches.
+  joined_admissions_discharges            Direct matches only.
+  joined_admissions_discharges_extended   Direct and probabilistic matches.
+  unmatched_admissions                    Admissions with no discharge of the
+                                          same uid and facility.
+  unmatched_discharges                    Discharges with no admission of the
+                                          same uid and facility among the
+                                          admissions in the date window.
+
+master_joined and master_joined_extended have the same number of rows. In
+master_joined_extended the rows are ordered: direct matches, probabilistic
+matches, unmatched admissions.
+
+A direct match is an admission and a discharge with the same uid and the same
+facility. A probabilistic match is a pair accepted by the similarity rule in
+modules/README_prob_matcher.txt; its admission and discharge have different
+uid or facility values.
+
+
+COLUMNS
+-------
+  Columns                   Content
+  ------------------------  --------------------------------------------------
+  Admission columns         All columns of the cleaned admissions file, with
+                            their names unchanged.
+  Discharge columns         All columns of the cleaned discharges file. A
+                            discharge column whose name also exists in the
+                            admissions file has the suffix _dis, for example
+                            uid_dis, facility_dis.
+  match_key                 uid and facility of the admission joined by an
+                            underscore.
+  adm_date_parsed           datetimeadmission parsed as a date-time.
+  match_type                direct_match, prob_match or unmatched.
+                            master_joined contains only direct_match and
+                            unmatched.
+  prob_match_similarity     Similarity score, 0 to 100, of a prob_match row;
+                            empty for all other rows.
+
+joined_admissions_discharges has no match_type or prob_match_similarity
+column. unmatched_admissions has the admission columns, match_key and
+adm_date_parsed. unmatched_discharges has the discharge columns under their
+original names and match_key.
+
+Missing values are written as empty cells.
+
+
+NA-CODED FILES
+--------------
+{prefix}_master_joined_{label}_na_coded.csv and
+{prefix}_master_joined_extended_{label}_na_coded.csv have the same rows and
+columns as the standard files. The values of the admission and discharge
+columns are taken from the cleaning pipeline's _cleaned_na_coded.csv files, in
+which missing values carry numeric codes. match_type, prob_match_similarity,
+match_key and adm_date_parsed are the same as in the standard files. Discharge
+columns of unmatched rows are empty.
+
+
+SUPPORTING FILES
+----------------
+  prob_match_candidates    One row per candidate pair at or above the
+                           similarity threshold: row positions, uid and
+                           facility of both records, overall_similarity,
+                           same_facility, and for each matching variable its
+                           score (sim_), admission value (adm_) and discharge
+                           value (dis_).
+  prob_match_assignments   The accepted pairs, same columns.
+  duplicates_log           One row per record that shares a key with another
+                           record (see modules/README_deduplicator.txt).
+  matching_statistics      Text report of the direct join.
+  prob_matching_report     Text report of the probabilistic matching.
+  pipeline_log             The two reports in one file.
+  profiles/                Per-variable profiles (README_run_data_profiler.txt).
+
+
+SUBSAMPLE FILES (MASTER MODE)
+-----------------------------
+  File                                     Taken from
+  ---------------------------------------  -----------------------------------
+  subsample_master                         master_joined
+  subsample_master_extended                master_joined_extended
+  subsample_master_matched_only            subsample_master, direct_match rows
+  subsample_master_extended_matched_only   subsample_master_extended,
+                                           direct_match and prob_match rows
+
+Each holds the rows that pass the subsample filters and the selected columns
+(see README_run_subsample_maker.txt).
+
+
+
+################################################################################
+#
+#  PART III -- CONFIGURATION
+#
+################################################################################
+
+
+================================================================================
+  3.1  config_sample_maker.R -- Pipeline 1 configuration
+================================================================================
+  Source file: README_files/README_config_sample_maker.txt
+================================================================================
+
+================================================================================
+  Neotree Sample Maker -- config_sample_maker.R
+================================================================================
+
+PURPOSE
+-------
+Holds the settings of the join, as one list named CONFIG. It is read by
+run_sample_maker.R and run_all.R.
+
+
+SETTINGS
+--------
+
+Data selection
+
+  country    "zim" or "mwi". Selects input folders that start with this code
+             and sets the output prefix and folder.
+  source     "from_database" or "from_metabase". Selects input folders with
+             the source code db or mb. Any other value stops the run.
+
+  run_all.R replaces both values for each pair it finds.
+
+Admission date window
+
+  use_advanced_mode      FALSE: one window for all facilities, from
+                         adm_start_date and adm_end_date.
+                         TRUE: one window per facility, from
+                         facility_date_ranges; the two date settings are
+                         ignored.
+  adm_start_date         "YYYY-MM-DD", or NULL for no lower bound.
+  adm_end_date           "YYYY-MM-DD", or NULL. With NULL the end date is the
+                         latest parsed admission date in the file minus one
+                         calendar month.
+  facility_date_ranges   List of entries c("FACILITY", "start", "end") with
+                         dates as "YYYY-MM-DD". Only admissions of the listed
+                         facilities, inside their own range, are kept. Each
+                         entry needs three elements and both dates. With
+                         use_advanced_mode = TRUE an empty list stops the run.
+
+  Both bounds are inclusive; the end date runs to 23:59:59. When a bound is
+  set, admissions whose datetimeadmission cannot be parsed are left out.
+  Discharges are never filtered by date. The run stops if no admission is left.
+
+Paths
+
+  cleaning_pipeline_output_dir   Folder that holds the cleaned dataset
+                                 folders. Default "input". A path that does
+                                 not exist as given is looked for under the
+                                 script folder.
+  output_dir                     Root folder for outputs. Default "outputs".
+                                 run_all.R always uses the outputs/ folder
+                                 beside the script.
+
+Probabilistic matching
+
+  prob_match_min_similarity          Lowest overall score, 0 to 100, for a
+                                     pair to be kept as a candidate. 100
+                                     accepts only pairs that agree on every
+                                     compared variable.
+  prob_match_max_candidates          Highest number of candidates kept for
+                                     one admission, taken in order of score.
+  prob_match_completeness_threshold  Proportion, 0 to 1. A variable is used
+                                     only if at least this share of its
+                                     values is filled in both files.
+  prob_match_cross_facility          FALSE: an admission is compared only
+                                     with unmatched discharges of the same
+                                     facility. TRUE: when there is no
+                                     unmatched discharge in the admission's
+                                     facility, it is compared with all
+                                     unmatched discharges.
+  prob_match_birthweight_tolerance   Tolerances of the numeric variables, in
+  prob_match_gestation_tolerance     the units of the data (birthweight in
+  prob_match_ofc_tolerance           grams, gestation in weeks, ofc in cm,
+  prob_match_temperature_tolerance   temperature in degrees Celsius). 0 means
+  prob_match_apgar1_tolerance        only equal values score. A difference of
+  prob_match_apgar5_tolerance        twice the tolerance or more scores 0.
+  prob_match_apgar10_tolerance       A setting left out takes the default in
+                                     modules/prob_matcher.R.
+
+  The scoring rule is in modules/README_prob_matcher.txt.
+
+NA-coded output
+
+  output_na_coded   TRUE: run_all.R also writes na_coded versions of
+                    master_joined and master_joined_extended, built from the
+                    _cleaned_na_coded.csv files beside the cleaned inputs. If
+                    either file is missing the na_coded versions are skipped
+                    and the run continues.
+                    FALSE: only the standard files are written.
+                    run_sample_maker.R does not read this setting.
+
+
+HOW TO USE
+----------
+Edit the values in config_sample_maker.R, or copy the file and pass the copy
+to run_sample_maker.R as its first argument. run_all.R always reads
+config_sample_maker.R from the script folder.
+
+
+================================================================================
+  3.2  config_subsample_maker.R -- Pipeline 2 configuration
+================================================================================
+  Source file: README_files/README_config_subsample_maker.txt
+================================================================================
+
+================================================================================
+  Neotree Sample Maker -- Subsample settings (SUBSAMPLE_CONFIG)
+================================================================================
+
+PURPOSE
+-------
+Lists the settings read by run_subsample_maker.R and their effect. How each
+filter works is described in README_run_subsample_maker.txt.
+
+
+CONFIG FILES
+------------
+  config_subsample_maker.R              A complete example with both modes.
+  config_subsample_TEMPLATE.R           Annotated list of every setting.
+  config_subsample_master_TEMPLATE.R    Starting point for a master-mode
+                                        request.
+  config_subsample_cleaned_TEMPLATE.R   Starting point for a cleaned-mode
+                                        request.
+
+Each defines one list named SUBSAMPLE_CONFIG. Copy a file, fill it in, and
+pass the copy to run_subsample_maker.R as its first argument.
+
+
+SETTINGS
+--------
+
+Mode
+
+  source_type   "master": read the two master dataset files.
+                "cleaned": read cleaned files from the input folder.
+                Missing or empty is taken as "master". Any other value stops
+                the run.
+
+Master mode
+
+  master_joined_file            Paths of the two master files. A path that
+  master_joined_extended_file   does not exist as given is looked for under
+                                the script folder. The run stops if either
+                                file is missing.
+
+Cleaned mode
+
+  cleaning_pipeline_output_dir  Folder with the cleaned dataset folders. A
+                                path that does not exist as given is looked
+                                for under the script folder.
+  country                       "zim" or "mwi".
+  source                        "from_database" or "from_metabase". The
+                                second is refused unless INCLUDE_METABASE is
+                                TRUE in run_subsample_maker.R. The check is
+                                made in master mode too when the setting is
+                                present.
+  datasets                      One entry per dataset type; see below.
+
+Both modes
+
+  output_dir               Folder for the outputs. NULL uses subsamples/
+                           beside the script. A relative path is taken from
+                           the script folder. The folder is created if needed.
+  output_na_coded          TRUE: also write the na_coded files when the
+                           na_coded sources exist. FALSE: standard files only.
+  sub_start_date           "YYYY-MM-DD" or NULL (no lower bound).
+  sub_end_date             "YYYY-MM-DD" or NULL (no upper bound).
+  sub_facility_filter      NULL for all facilities, or a character vector of
+                           facility names as they appear in the facility
+                           column.
+  sub_use_advanced_mode    TRUE: use sub_facility_date_ranges in place of the
+                           two dates and the facility filter.
+  sub_facility_date_ranges List of entries c("FACILITY", "start", "end").
+                           Master mode needs both dates in every entry and
+                           stops if the list is empty. Cleaned mode accepts NA
+                           for an open side and, if the list is empty, falls
+                           back to the two dates and the facility filter.
+  sub_exclusion_filters    List of filters, each
+                           list(variable = , operator = , value = ).
+                           Rows that meet a condition are removed. Operators:
+                           <, <=, >, >=, ==, !=, in, not_in. value may be a
+                           vector for in and not_in.
+  sub_variables            NULL keeps all columns. A character vector keeps
+                           those columns and the mandatory ones.
+
+  Master mode filters on the admission date. Cleaned mode filters each type
+  on its own date_column.
+
+Dataset entries (cleaned mode)
+
+  datasets is a list with the entries admissions, discharges, neolab and
+  maternal. Each entry is a list:
+
+  include                     TRUE to process the type.
+  date_column                 Column used for the date filter, or NULL for
+                              none.
+  sub_start_date              Replaces the global start date for this type.
+  sub_end_date                Replaces the global end date for this type.
+  sub_end_date_offset_months  Whole number of calendar months added to the
+                              end date of this type. NULL or 0 adds none.
+  date_window_note            Text printed in the report of this type. When
+                              it is NULL or empty and an offset is set, the
+                              report states the extension.
+  sub_variables               Replaces the global column list when not NULL.
+  sub_exclusion_filters       Replaces the global filters when not empty.
+
+
+EXAMPLE
+-------
+  SUBSAMPLE_CONFIG <- list(
+    source_type                  = "cleaned",
+    cleaning_pipeline_output_dir = "input",
+    country                      = "zim",
+    source                       = "from_database",
+    output_dir                   = "subsamples/mystudy",
+    output_na_coded              = FALSE,
+    sub_start_date               = "2025-01-01",
+    sub_end_date                 = "2025-12-31",
+    sub_facility_filter          = c("FACILITY_A"),
+    sub_use_advanced_mode        = FALSE,
+    sub_facility_date_ranges     = list(),
+    sub_exclusion_filters        = list(
+      list(variable = "gestation", operator = "<", value = 24)
+    ),
+    sub_variables                = NULL,
+    datasets = list(
+      admissions = list(
+        include       = TRUE,
+        date_column   = "datetimeadmission",
+        sub_variables = c("birthweight", "gestation", "gender")
+      ),
+      discharges = list(
+        include                    = TRUE,
+        date_column                = "datetimedischarge",
+        sub_end_date_offset_months = 1L
+      )
+    )
+  )
+
+
+
+################################################################################
+#
+#  PART IV -- MODULE REFERENCE
+#
+################################################################################
+
+
+================================================================================
+  4.1  file_finder.R -- locate input files
+================================================================================
+  Source file: modules/README_file_finder.txt
+================================================================================
+
+================================================================================
+  Module: file_finder.R
+================================================================================
+
+PURPOSE
+-------
+Finds the cleaned admissions file and the cleaned discharges file for one
+country and source.
+
+
+WHEN IT RUNS
+------------
+Step 1 of run_sample_maker.R and of each join run in run_all.R.
+
+
+WHAT IT DOES
+------------
+With cleaning_pipeline_output_dir set (the supplied configuration):
+
+1. Uses the folder as given; if it does not exist, looks for it under the
+   script folder. Stops if it is not found.
+2. Builds the name prefix {country}_{src}_{type}_, where country is in lower
+   case, src is db for from_database and mb for from_metabase, and type is
+   admissions or discharges.
+3. Takes the direct subfolders whose names start with the prefix, and inside
+   them the files that start with the prefix and end in _cleaned.csv. Matching
+   ignores case.
+4. If several files match, uses the most recently modified one and gives a
+   warning naming the others.
+
+It stops if source has another value, if no subfolder matches, or if no file
+matches.
+
+With cleaning_pipeline_output_dir = NULL the function reads a different
+layout: {cleaned_files_dir}/{country}/{source}/{cleaning}/, where cleaning is
+"Python_cleaned" or "R_cleaned". It takes the CSV files in that folder that
+start with the same prefix and applies the same most-recent rule. The settings
+cleaned_files_dir and cleaning are not in the supplied config file.
+
+
+INPUTS
+------
+  cfg          Configuration list: country, source,
+               cleaning_pipeline_output_dir.
+  script_dir   Folder of the calling script, or NULL.
+
+
+OUTPUTS
+-------
+A list:
+
+  admissions_path   Path of the admissions file.
+  discharges_path   Path of the discharges file.
+  target_dir        Folder that was searched.
+
+
+FUNCTION
+--------
+find_input_files(cfg, script_dir = NULL)
+
+modules/pipeline_file_resolver.R holds a related function used by
+run_subsample_maker.R in cleaned mode:
+
+resolve_pipeline_file(output_dir, country, source, dataset_type,
+                      use_na_coded = FALSE)
+
+It applies the same search to one dataset type and returns one path.
+use_na_coded = TRUE looks for the file ending in _cleaned_na_coded.csv.
+
+
+================================================================================
+  4.2  loader.R -- load and validate data
+================================================================================
+  Source file: modules/README_loader.txt
+================================================================================
+
+================================================================================
+  Module: loader.R
+================================================================================
+
+PURPOSE
+-------
+Reads the cleaned admissions and discharges files and checks that the columns
+needed for the join are present.
+
+
+WHEN IT RUNS
+------------
+Step 2 of run_sample_maker.R and of each join run in run_all.R. run_all.R also
+calls load_na_coded_data() when output_na_coded is TRUE.
+
+
+WHAT IT DOES
+------------
+load_data() reads each file with read.csv, keeping text as text and column
+names unchanged. It stops if a file does not exist, cannot be read, has no
+rows, or lacks a required column:
+
+  admissions   uid, facility, datetimeadmission
+  discharges   uid, facility
+
+load_na_coded_data() takes the two paths, replaces _cleaned.csv with
+_cleaned_na_coded.csv, and reads those files. A file that is missing or cannot
+be read gives a message and a NULL result; the run continues.
+
+
+INPUTS
+------
+  admissions_path   Path of the cleaned admissions file.
+  discharges_path   Path of the cleaned discharges file.
+
+
+OUTPUTS
+-------
+load_data() returns a list:
+
+  admissions   Data frame.
+  discharges   Data frame.
+  n_adm_raw    Number of admission rows read.
+  n_dis_raw    Number of discharge rows read.
+
+load_na_coded_data() returns a list with adm_na_coded and dis_na_coded, each a
+data frame or NULL.
+
+
+FUNCTIONS
+---------
+load_data(admissions_path, discharges_path)
+load_na_coded_data(admissions_path, discharges_path)
+
+
+================================================================================
+  4.3  filter_data.R -- date and facility filtering
+================================================================================
+  Source file: modules/README_filter_data.txt
+================================================================================
+
+================================================================================
+  Module: filter_data.R
+================================================================================
+
+PURPOSE
+-------
+Parses the admission date, works out the admission date window, and keeps the
+admissions inside it.
+
+
+WHEN IT RUNS
+------------
+Steps 3 to 5 of run_sample_maker.R and of each join run in run_all.R, after
+loading and before the join. Discharges are not filtered.
+
+
+WHAT IT DOES
+------------
+Date parsing. parse_admission_dates() adds the column adm_date_parsed
+(date-time, UTC). datetimeadmission is read as YYYY-MM-DD HH:MM:SS; values
+that fail are read from their first ten characters as YYYY-MM-DD. Values that
+still fail are NA and are counted in a console warning.
+
+Date window. resolve_date_window() returns the window and the output label.
+
+  Setting                      Window
+  ---------------------------  -----------------------------------------------
+  use_advanced_mode = TRUE     None here; the per-facility ranges are applied
+                               by the filter.
+  adm_end_date given           adm_start_date to adm_end_date.
+  adm_end_date = NULL          adm_start_date to the latest parsed admission
+                               date minus one calendar month.
+
+Filter. apply_admission_filter() keeps:
+
+  Simple mode     Admissions dated from the start date (if set) to the end
+                  date at 23:59:59. When a bound is set, admissions with an
+                  NA date are dropped. If the configuration list has a
+                  facility_filter element, only those facilities are kept;
+                  the supplied config file does not define one.
+  Advanced mode   For each entry c("FACILITY", "start", "end") of
+                  facility_date_ranges, the admissions of that facility with
+                  a date in the range. Each entry must have three elements,
+                  and both dates must be given. If the same uid and facility
+                  is selected more than once, the first row is kept.
+
+The function stops if no admission is left, or if advanced mode is on and
+facility_date_ranges is empty.
+
+apply_variable_filter() keeps the admissions whose value in the column
+variable_filter_col is one of variable_filter_values. It returns the data
+unchanged when either setting is NULL. The run scripts do not call it.
+
+
+INPUTS
+------
+  admissions    Data frame with datetimeadmission, uid and facility.
+  cfg           Configuration list: use_advanced_mode, adm_start_date,
+                adm_end_date, facility_date_ranges.
+  date_window   Result of resolve_date_window().
+
+
+OUTPUTS
+-------
+  parse_admission_dates()    The data frame with adm_date_parsed added.
+  resolve_date_window()      List: adm_start, adm_end, auto_mode, label.
+  apply_admission_filter()   List: admissions (filtered), n_before, n_after,
+                             n_excluded, filter_desc (lines for the report),
+                             filter_label.
+  apply_variable_filter()    List: admissions, n_excluded_varfilt,
+                             var_filter_desc.
+
+The label is built as described under FILE NAMES in
+README_files/README_PIPELINE.txt.
+
+
+FUNCTIONS
+---------
+parse_admission_dates(admissions)
+resolve_date_window(admissions, cfg)
+apply_admission_filter(admissions, date_window, cfg)
+apply_variable_filter(admissions, cfg, filter_result)
+
+
+================================================================================
+  4.4  deduplicator.R -- resolve duplicate keys
+================================================================================
+  Source file: modules/README_deduplicator.txt
+================================================================================
+
+================================================================================
+  Module: deduplicator.R
+================================================================================
+
+PURPOSE
+-------
+Finds records that share the same match_key within one data frame and keeps
+one record for each key.
+
+
+WHEN IT RUNS
+------------
+Step 6 of run_sample_maker.R and of each join run in run_all.R, once for
+admissions and once for discharges.
+
+
+WHAT IT DOES
+------------
+The function reads the column match_key (uid and facility joined by an
+underscore). For each key that occurs more than once:
+
+1. It counts the NA values in each row of the group.
+2. It keeps the row with the fewest NA values; on a tie, the first. The other
+   rows are removed.
+3. If the data frame has a datetimeadmission column and more than one row of
+   the group has a non-empty value in it, the group is flagged
+   possible_readmission and a message is printed. Flagged groups are resolved
+   in the same way.
+
+Every row of every duplicate group is written to the log.
+
+A data frame that has no match_key column is returned unchanged, with zero
+duplicates reported. The run scripts call this function before join_data()
+adds match_key.
+
+
+INPUTS
+------
+  df      Data frame of admissions or discharges.
+  label   Text naming the data frame in messages and in the log, for example
+          "ADMISSIONS".
+
+
+OUTPUTS
+-------
+A list:
+
+  df           Data frame with the removed rows left out.
+  log          Data frame, one row per record in a duplicate group; empty when
+               there are none. Columns: source, match_key, row_index_in_file
+               (position in df), na_count, action (KEPT or REMOVED),
+               possible_readmission.
+  n_dup_keys   Number of keys that occurred more than once.
+  n_removed    Number of rows removed.
+
+output_writer.R writes the two logs together as {prefix}_duplicates_log.csv
+when they contain any row.
+
+
+FUNCTION
+--------
+resolve_duplicates(df, label)
+
+
+================================================================================
+  4.5  joiner.R -- direct uid + facility matching
+================================================================================
+  Source file: modules/README_joiner.txt
+================================================================================
+
+================================================================================
+  Module: joiner.R
+================================================================================
+
+PURPOSE
+-------
+Matches admissions to discharges on uid and facility.
+
+
+WHEN IT RUNS
+------------
+Step 7 of run_sample_maker.R and of each join run in run_all.R, after the date
+filter and the duplicate check.
+
+
+WHAT IT DOES
+------------
+1. Adds match_key to both data frames: uid, an underscore, facility.
+2. Splits the keys into three sets: keys in both data frames (matched), keys
+   only in admissions, keys only in discharges.
+3. Builds the matched pairs: the matched admissions and the matched
+   discharges are each sorted by match_key and placed side by side. A
+   discharge column whose name also exists in admissions gets the suffix _dis.
+   match_key appears once. The side-by-side placement relies on each key
+   occurring once in each data frame.
+4. Counts the values of the outcome column among the matched pairs, and the
+   matched pairs by facility, for the statistics report. The outcome column is
+   neotreeoutcome, or neotreeoutcome_dis if the first is absent.
+
+
+INPUTS
+------
+  admissions   Data frame with uid and facility (filtered admissions).
+  discharges   Data frame with uid and facility (all discharges).
+
+
+OUTPUTS
+-------
+A list:
+
+  matched_pairs     Data frame, one row per matched key: admission columns,
+                    then discharge columns.
+  unmatched_adm     Admissions whose key is not in discharges.
+  unmatched_dis     Discharges whose key is not in admissions.
+  n_matched         Number of matched keys.
+  n_unmatched_adm   Number of keys only in admissions.
+  n_unmatched_dis   Number of keys only in discharges.
+  n_adm_total       Number of admission rows.
+  n_dis_total       Number of discharge rows.
+  outcome_col       Name of the outcome column used, or NULL.
+  outcome_summary   List with the report lines (lines) and the column used
+                    (col_used).
+
+
+FUNCTION
+--------
+join_data(admissions, discharges)
+
+
+================================================================================
+  4.6  prob_matcher.R -- probabilistic matching engine
+================================================================================
+  Source file: modules/README_prob_matcher.txt
+================================================================================
+
+================================================================================
+  Module: prob_matcher.R
+================================================================================
+
+PURPOSE
+-------
+Pairs admissions that have no direct match with discharges that have no direct
+match, by comparing clinical variables recorded on both forms.
+
+
+WHEN IT RUNS
+------------
+Steps 9 and 10 of run_sample_maker.R and of each join run in run_all.R, after
+the direct join.
+
+
+WHAT IT DOES
+------------
+
+Variable selection: detect_match_variables()
+
+The candidate variables are birthweight, gestation, temperature, apgar1,
+apgar5, apgar10, gender, ofc, modedelivery and typebirth. A variable is used
+when:
+
+  - a column of that name exists in both files, and
+  - the share of filled values (not NA, not empty) is at least
+    prob_match_completeness_threshold in each file. The share is measured on
+    the files as loaded.
+
+A variable is numeric when more than half of its admission values convert to a
+number; otherwise it is categorical. A numeric variable takes its tolerance
+from the setting prob_match_{variable}_tolerance, or from the default below
+when the setting is absent. Categorical variables are compared for equality.
+
+  Variable       Default tolerance
+  -------------  -----------------
+  birthweight    50
+  gestation      1
+  ofc            1
+  temperature    0.5
+  apgar1         0
+  apgar5         0
+  apgar10        0
+
+If no variable qualifies, a warning is given and no matching is done.
+
+Scoring: find_prob_candidates()
+
+Each unmatched admission is compared with the unmatched discharges of the same
+facility. If there is no unmatched discharge in that facility and
+prob_match_cross_facility is TRUE, it is compared with all unmatched
+discharges.
+
+Score of one variable for one pair, with d the absolute difference and t the
+tolerance:
+
+  Case                                      Score
+  ----------------------------------------  --------------------------------
+  Numeric, d = 0                            100
+  Numeric, t = 0, d > 0                     0
+  Numeric, 0 < d <= t                       100 * (1 - d / t)
+  Numeric, t < d <= 2t                      50 * (1 - (d - t) / t)
+  Numeric, d > 2t                           0
+  Categorical, equal text                   100
+  Categorical, different text               0
+
+The overall similarity of a pair is the mean of the variable scores, over the
+variables that are filled in both records. A pair with no such variable scores
+0.
+
+For each admission, the pairs with overall similarity of at least
+prob_match_min_similarity are kept, up to prob_match_max_candidates, highest
+first.
+
+Assignment: assign_one_to_one()
+
+The candidates are sorted by overall similarity, highest first, and taken in
+that order. A pair is accepted if neither its admission nor its discharge is
+already in an accepted pair. Each admission and each discharge is therefore in
+at most one accepted pair.
+
+
+INPUTS
+------
+  adm_full, dis_full   Admissions and discharges as loaded.
+  unmatched_adm        From join_data().
+  unmatched_dis        From join_data().
+  var_info             From detect_match_variables().
+  cfg                  Configuration list with the prob_match_ settings.
+  candidates           From find_prob_candidates().
+
+
+OUTPUTS
+-------
+  detect_match_variables()   List: vars (name -> TRUE if numeric),
+                             tolerances, col_map_adm, col_map_dis.
+  find_prob_candidates()     Data frame, one row per candidate pair:
+                             adm_row_idx, dis_row_idx (row positions in the
+                             unmatched data frames), overall_similarity,
+                             adm_uid, adm_facility, dis_uid, dis_facility,
+                             same_facility, and for each variable sim_{var},
+                             adm_{var}, dis_{var}. Empty when nothing is
+                             found.
+  assign_one_to_one()        Data frame of the accepted pairs, same columns.
+
+
+FUNCTIONS
+---------
+detect_match_variables(adm_full, dis_full, cfg)
+find_prob_candidates(unmatched_adm, unmatched_dis, var_info, cfg)
+assign_one_to_one(candidates)
+
+
+CONFIGURATION
+-------------
+  prob_match_completeness_threshold   Lowest share of filled values for a
+                                      variable to be used.
+  prob_match_min_similarity           Lowest overall similarity kept.
+  prob_match_max_candidates           Highest number of candidates kept per
+                                      admission.
+  prob_match_cross_facility           Allows comparison across facilities as
+                                      described above.
+  prob_match_{variable}_tolerance     Tolerance of a numeric variable.
+
+
+================================================================================
+  4.7  master_builder.R -- assemble master datasets
+================================================================================
+  Source file: modules/README_master_builder.txt
+================================================================================
+
+================================================================================
+  Module: master_builder.R
+================================================================================
+
+PURPOSE
+-------
+Assembles master_joined and master_joined_extended from the results of the
+join and of the probabilistic matching.
+
+
+WHEN IT RUNS
+------------
+Steps 8 and 11 of run_sample_maker.R and of each join run in run_all.R.
+
+
+WHAT IT DOES
+------------
+build_master_joined() stacks two sets of rows:
+
+  Matched pairs          match_type = "direct_match".
+  Unmatched admissions   match_type = "unmatched"; every column they lack
+                         (the discharge columns) is added as NA.
+
+prob_match_similarity is NA in every row. The columns are in the order of the
+matched pairs, followed by match_type and prob_match_similarity.
+
+build_master_joined_extended() starts from master_joined. With no accepted
+pair it returns master_joined as it is. Otherwise, for each accepted pair:
+
+1. It takes the unmatched row of master_joined with the uid and facility of
+   the pair's admission. If there is not exactly one such row, it rebuilds the
+   row from the unmatched admissions data frame.
+2. It fills the discharge columns from the pair's discharge record. Discharge
+   columns are the columns of master_joined that are not admission columns,
+   match_key, match_type or prob_match_similarity; a name ending in _dis is
+   filled from the discharge column without the suffix.
+3. It sets match_type = "prob_match" and prob_match_similarity to the pair's
+   overall similarity.
+
+The result is the direct_match rows, then the prob_match rows, then the
+unmatched rows that were not paired.
+
+
+INPUTS
+------
+  matched_pairs      From join_data().
+  unmatched_adm      From join_data().
+  master_joined      From build_master_joined().
+  assignments        From assign_one_to_one().
+  unmatched_adm_df   From join_data().
+  unmatched_dis_df   From join_data().
+
+
+OUTPUTS
+-------
+Each function returns one data frame. The files written from them are
+described in README_files/README_master_dataset.txt.
+
+
+FUNCTIONS
+---------
+build_master_joined(matched_pairs, unmatched_adm)
+build_master_joined_extended(master_joined, assignments, unmatched_adm_df,
+                             unmatched_dis_df)
+
+
+================================================================================
+  4.8  output_writer.R -- write outputs and reports
+================================================================================
+  Source file: modules/README_output_writer.txt
+================================================================================
+
+================================================================================
+  Module: output_writer.R
+================================================================================
+
+PURPOSE
+-------
+Writes the data files and text reports of one join run.
+
+
+WHEN IT RUNS
+------------
+Step 12 of run_sample_maker.R and of each join run in run_all.R.
+
+
+WHAT IT DOES
+------------
+1. Creates the folder {output_dir}/{country}_master/{source}/, with country in
+   lower case.
+2. Builds the file prefix (country in upper case, underscore, db or mb) and
+   takes the label from the date filter.
+3. Writes the six data files. joined_admissions_discharges_extended is the
+   rows of master_joined_extended whose match_type is not "unmatched".
+   Missing values are written as empty cells.
+4. If both na_coded data frames are supplied, builds and writes the na_coded
+   master files. Rows are looked up by uid and facility in the na_coded
+   sources, and the values of the admission and discharge columns are
+   replaced by the values found there. match_type, prob_match_similarity,
+   match_key and adm_date_parsed are left as they are. Discharge columns of
+   unmatched rows are set to NA. For prob_match rows the discharge record is
+   looked up by the discharge uid and facility of the accepted pair. If this
+   step fails, a warning is printed and the run continues without these files.
+5. Writes the candidates file and the assignments file when they have rows,
+   and the duplicates log when either log has rows.
+6. Writes the two reports and the pipeline log, which holds both reports.
+
+
+INPUTS
+------
+  cfg   Configuration list: country, source, output_dir.
+  ps    List holding the results of the earlier steps: admissions_path,
+        discharges_path, n_adm_raw, n_dis_raw, date_window, filter_result,
+        varfilt_result, adm_dedup, dis_dedup, join_result, var_info,
+        prob_candidates, prob_assignments, master_joined,
+        master_joined_extended, and optionally adm_na_coded and dis_na_coded.
+
+
+OUTPUTS
+-------
+  {prefix}_joined_admissions_discharges_{label}.csv
+  {prefix}_joined_admissions_discharges_extended_{label}.csv
+  {prefix}_unmatched_admissions_{label}.csv
+  {prefix}_unmatched_discharges_{label}.csv
+  {prefix}_master_joined_{label}.csv
+  {prefix}_master_joined_extended_{label}.csv
+  {prefix}_master_joined_{label}_na_coded.csv              step 4
+  {prefix}_master_joined_extended_{label}_na_coded.csv     step 4
+  {prefix}_prob_match_candidates_{label}.csv               step 5
+  {prefix}_prob_match_assignments_{label}.csv              step 5
+  {prefix}_duplicates_log.csv                              step 5
+  {prefix}_matching_statistics_{label}.txt
+  {prefix}_prob_matching_report_{label}.txt
+  {prefix}_pipeline_log_{label}.txt
+
+The data files are described in README_files/README_master_dataset.txt.
+
+Matching statistics report:
+
+  Run metadata             Time, country, source, label.
+  Input files              File names and rows read.
+  Admission filter         Window, rows before and after.
+  Deduplication            Duplicate keys and rows removed, per file.
+  Direct matching summary  Matched pairs, unmatched admissions, unmatched
+                           discharges, as counts and percentages.
+  Neotree outcomes         Counts of the outcome column among direct matches,
+                           and direct matches by facility.
+  Unmatched breakdown      Unmatched admissions and discharges by facility.
+  Master dataset summary   Rows by match_type in both master datasets.
+  Output files             Names of the files written.
+
+Probabilistic matching report:
+
+  Run metadata             Time, country, source, label.
+  Configuration            The four general prob_match_ settings.
+  Variable selection       Variables used, their type, tolerance and columns.
+  Candidate search         Candidate pairs, admissions with a candidate,
+                           within-facility and cross-facility counts, and the
+                           distribution of similarity.
+  One-to-one assignments   Pairs accepted and summary of their similarity.
+  Per-variable scores      Mean and median score of each variable among the
+                           accepted pairs.
+  Master_joined_extended   Rows by match_type and counts of the outcome
+                           column.
+  Top assignments          Up to 20 accepted pairs with their similarity and
+                           the uid of the admission and of the discharge.
+  Output files             Names of the files written.
+
+
+FUNCTION
+--------
+write_outputs(cfg, ps) returns a named list of the output paths.
+
+
+================================================================================
+  4.9  subsample_maker.R -- filtering and column selection
+================================================================================
+  Source file: modules/README_subsample_maker.txt
+================================================================================
+
+================================================================================
+  Modules: subsample_maker.R and subsample_maker_cleaned.R
+================================================================================
+
+PURPOSE
+-------
+Hold the filtering and writing functions used by run_subsample_maker.R.
+subsample_maker.R serves master mode; subsample_maker_cleaned.R serves cleaned
+mode.
+
+
+WHEN IT RUNS
+------------
+Sourced by run_subsample_maker.R according to source_type. The script loads
+the input files and the na_coded sources, and passes them to these functions.
+
+
+WHAT IT DOES
+------------
+The filtering rules of both modes (date and facility filter, exclusion
+filters, column selection, matched-only files) are described in
+README_files/README_run_subsample_maker.txt, and the settings in
+README_files/README_config_subsample_maker.txt.
+
+In master mode, run_subsample_maker() applies the same steps to master_joined
+and master_joined_extended and derives the two matched-only data frames.
+Column selection is worked out on master_joined and applied to both.
+
+In cleaned mode, run_subsample_maker_cleaned() processes one data frame. The
+calling script passes the mandatory columns and the date column of the dataset
+type.
+
+Both keep the original row names of the input through filtering. The calling
+script uses them to pick the same rows from the na_coded source.
+
+The output label is built as described under FILE NAMES in
+README_files/README_PIPELINE.txt.
+
+
+INPUTS
+------
+Master mode:
+
+  master_joined, master_joined_extended   Data frames read from the master
+                                          files. Both need datetimeadmission.
+  cfg                                     SUBSAMPLE_CONFIG.
+
+Cleaned mode:
+
+  df               Data frame read from one cleaned file.
+  mandatory_cols   Columns always kept when a column list is set.
+  date_col         Name of the date column, or NULL.
+  cfg_global       SUBSAMPLE_CONFIG.
+  cfg_dataset      The entry of SUBSAMPLE_CONFIG$datasets for this type, or
+                   NULL.
+
+
+OUTPUTS
+-------
+run_subsample_maker() returns a list:
+
+  subsample_joined, subsample_joined_extended,
+  subsample_joined_matched_only, subsample_joined_extended_matched_only
+                                 The four data frames.
+  meta_joined, meta_extended     Counts and date range after the date and
+                                 facility filter.
+  excl_joined, excl_extended     Rows removed by each exclusion filter.
+  sub_filter_desc, sub_label     Filter description lines and output label.
+  col_info                       Columns kept, mandatory, requested and not
+                                 found.
+
+run_subsample_maker_cleaned() returns a list with data (the filtered data
+frame), label, the row counts n_raw, n_after_date, n_after_excl and n_final,
+cols_selected, cols_not_found, the effective settings (date_col, start_date,
+end_date, date_window_note, facility_filter, use_adv, adv_ranges,
+excl_filters, sub_vars, mandatory_cols) and facility_breakdown.
+
+The files written are listed in README_files/README_run_subsample_maker.txt.
+
+
+FUNCTIONS
+---------
+subsample_maker.R
+
+  run_subsample_maker(master_joined, master_joined_extended, cfg)
+  write_subsample_outputs(sub_result, cfg, prefix, out_dir, na_coded = NULL)
+      Writes the four CSV files and the report, and returns their paths.
+      na_coded is NULL or a list with the elements joined, extended,
+      joined_matched and extended_matched; when given, the four na_coded
+      files are written too.
+
+subsample_maker_cleaned.R
+
+  run_subsample_maker_cleaned(df, mandatory_cols, date_col, cfg_global,
+                              cfg_dataset = NULL)
+  write_subsample_outputs_cleaned(result, prefix, type_label, out_dir,
+                                  na_coded_data = NULL)
+      Writes the CSV file and the report, and returns their paths. When
+      na_coded_data is a data frame it is written as the na_coded file.
+
+modules/subsample_maker_maternal.R and modules/subsample_maker_neolab.R define
+run_subsample_maker_maternal(), write_subsample_outputs_maternal(),
+run_subsample_maker_neolab() and write_subsample_outputs_neolab(). None of the
+run scripts sources these two modules.
+
+
+================================================================================
+  4.10  anonymizer.R -- de-identification module
+================================================================================
+  Source file: modules/README_anonymizer.txt
+================================================================================
+
+================================================================================
+  Module: anonymizer.R
+================================================================================
+
+PURPOSE
+-------
+Removes identifier columns from a data frame and, on request, reduces
+admission and discharge date-times to year and month.
+
+
+WHEN IT RUNS
+------------
+Called by run_anonymizer.R, once for each input file.
+
+
+WHAT IT DOES
+------------
+anonymize_dataset() applies these steps in order. Columns are matched by exact
+name; a column that is absent is passed over.
+
+  Step  Action
+  ----  ----------------------------------------------------------------------
+   1    Remove uid, uniquekey and match_key.
+   2    Remove adm_date_parsed.
+   3    Remove the columns named in additional_remove. Names not found give a
+        warning.
+   4    If convert_datetimes is TRUE: replace datetimeadmission by
+        adm_yearmonth and datetimedischarge by dis_yearmonth, in the same
+        column position. Values are read as YYYY-MM-DD HH:MM:SS, or from their
+        first ten characters as YYYY-MM-DD, and written as YYYY-MM. Values
+        that cannot be read become NA.
+   5    If add_anon_id is TRUE: add anon_id as the first column, numbering the
+        rows from 1 in their current order.
+
+Columns whose names differ from those listed, including the _dis copies in the
+master datasets (for example uid_dis), are kept unless they are named in
+additional_remove.
+
+The lists used in steps 1, 2 and 4 are the constants ANON_REMOVE_ALWAYS,
+ANON_REMOVE_PIPELINE_COLS and ANON_DATETIME_CONVERT at the top of the module.
+
+write_anonymizer_outputs() writes one {name}_anon.csv for each element of a
+list of results, and anonymization_report.txt, into one folder.
+run_anonymizer.R writes its files itself and uses only the report builder.
+
+
+INPUTS
+------
+  df    Data frame to anonymise.
+  cfg   List with additional_remove, convert_datetimes and add_anon_id.
+
+
+OUTPUTS
+-------
+anonymize_dataset() returns a list:
+
+  df              The anonymised data frame.
+  removed         Names of the columns removed, including converted ones.
+  converted       Text entries "original -> new" for converted columns.
+  added           Names of the columns added.
+  n_rows          Number of rows.
+  n_cols_before   Number of columns before.
+  n_cols_after    Number of columns after.
+
+
+FUNCTIONS
+---------
+anonymize_dataset(df, cfg)
+write_anonymizer_outputs(results_list, cfg, out_dir)
+
+
+CONFIGURATION
+-------------
+  additional_remove   Further column names to remove.
+  convert_datetimes   TRUE applies step 4.
+  add_anon_id         TRUE applies step 5.
+
+
+================================================================================
+  END OF MANUAL
+================================================================================

@@ -1,0 +1,20 @@
+Neotree Sample Maker -- Required R Packages
+============================================
+
+The run scripts use base R only (base, utils and tools), which ship with every
+standard R installation:
+
+  run_sample_maker.R, run_subsample_maker.R, run_all.R, run_anonymizer.R,
+  run_data_profiler.R
+
+Two CRAN packages are optional:
+
+  rstudioapi   Finds the script path when a script is sourced in RStudio.
+               Not needed with Rscript.
+  openxlsx     Writes the .xlsx workbook produced by run_subsample_user_dict.R.
+
+Install them with:
+
+  Rscript install_packages.r          (from CRAN)
+  Rscript install_packages_mirror.r   (from an internal package mirror; set the
+                                       repository address and token in the file)

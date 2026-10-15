@@ -1,0 +1,48 @@
+# =============================================================================
+# Neotree Sample Maker -- .gitignore
+# =============================================================================
+# This repository contains CODE, REFERENCE DICTIONARIES and DOCUMENTATION only.
+# Patient-level data and credentials must NEVER be committed.
+# =============================================================================
+
+# --- Operating system junk ---------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+
+# --- R session / project files -----------------------------------------------
+.Rhistory
+.Rapp.history
+.RData
+.Ruserdata
+*.Rproj
+.Rproj.user/
+.Renviron
+
+# --- Pipeline run artifacts (regenerated on every run) -----------------------
+outputs/
+*.log
+
+# --- Raw and processed patient data (NEVER COMMIT) ---------------------------
+# Cleaning pipeline output copied in for processing. Ignore everything here
+# except the guide explaining what belongs in the folder.
+input/*
+!input/README.md
+
+# Per-request subsample outputs.
+subsamples/*
+!subsamples/.gitkeep
+
+# NA-coded data extracts
+*_na_coded.csv
+*_na_coded.xlsx
+
+# --- Credentials / secrets (NEVER COMMIT) ------------------------------------
+# A mirror token belongs in a local copy of install_packages_mirror.r only --
+# the committed copy must keep the YOUR_TOKEN_HERE placeholder.
+.env
+*.pem
+*.key
+secrets.*
