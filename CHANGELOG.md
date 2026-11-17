@@ -2,6 +2,15 @@
 
 Releases are tagged in the repository.
 
+## [v2.0.2]
+
+- `run_all.R` now creates the match keys before the duplicate check, as `run_sample_maker.R` already did. Before this, the duplicate check in `run_all.R` found no key column and removed nothing, and in episode mode the join stopped on repeated discharge keys. Files cleaned with the earlier duplicate removal have no repeated `uid` + facility keys, so master files built from them are not affected.
+- Both run scripts call one function, `prepare_join_inputs()` in `modules/deduplicator.R`, which creates the match keys and then resolves repeated keys.
+- The duplicate check stops if the data has no `match_key` column, and if a key is repeated anywhere except in discharges cleaned in episode mode that carry `stay_form_primary`; a repeated admission key always stops. Files joined on `uid` + facility are never resolved by `stay_form_primary`, since without a stay identifier the rows may be different stays; before, the most complete row was kept. When it stops, no duplicates log is written and the message gives the number of repeated keys and the columns the rows share. Repeated discharge keys in episode mode are still resolved by `stay_form_primary`. `possible_readmission` in the duplicates log now means two or more different admission datetimes, and the console no longer prints the keys.
+- `run_all.R` run with `Rscript` exits with status 1 when a join run fails; in RStudio the session stays open.
+- Console messages and the matching statistics report say "repeated match keys" instead of "uid+facility keys".
+- `tests/test_episode_join.R` runs `prepare_join_inputs()` on made-up rows, runs `run_all.R` on made-up files with a repeated `uid` + facility key (it must stop with exit status 1 and write no master file), and checks that both run scripts call `prepare_join_inputs()`.
+
 ## [v2.0.1]
 
 - Admissions and discharges cleaned in episode mode (columns `baby_id` and `stay_no`) are joined on `baby_id` + `stay_no` + facility; other files still join on `uid` + facility. The match key is created before the duplicate check, which now has an effect; when a stay has several discharge forms, the form marked `stay_form_primary` is joined. The join lines rows up by key and stops if a key is repeated.

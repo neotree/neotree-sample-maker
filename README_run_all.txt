@@ -48,7 +48,9 @@ WHAT IT DOES
    either na_coded file is missing, the na_coded master files are not written.
 
 7. An error in one join run is reported and the next run starts. A summary of
-   succeeded and failed runs is printed at the end.
+   succeeded and failed runs is printed at the end. When run with Rscript,
+   the script exits with status 1 if any join run failed; in RStudio the
+   session stays open and the summary shows the failures.
 
 
 INPUTS

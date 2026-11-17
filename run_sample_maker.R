@@ -165,15 +165,11 @@ cat("----------------------------------------------------------------\n")
 cat("STEP 6 -- Deduplication\n")
 cat("----------------------------------------------------------------\n")
 
-keyed      <- add_match_keys(admissions, discharges)
-admissions <- keyed$admissions
-discharges <- keyed$discharges
-
-adm_dedup  <- resolve_duplicates(admissions, "ADMISSIONS")
-admissions <- adm_dedup$df
-
-dis_dedup  <- resolve_duplicates(discharges, "DISCHARGES")
-discharges <- dis_dedup$df
+prepared   <- prepare_join_inputs(admissions, discharges)
+admissions <- prepared$admissions
+discharges <- prepared$discharges
+adm_dedup  <- prepared$adm_dedup
+dis_dedup  <- prepared$dis_dedup
 
 cat("\n")
 

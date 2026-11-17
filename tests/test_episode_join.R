@@ -2,9 +2,9 @@
 # Neotree Sample Maker -- tests for joining files cleaned in episode mode
 # FILE:    tests/test_episode_join.R
 # PURPOSE: Checks, on made-up records, the match key, deduplication, join,
-#          probabilistic-match lookup, NA-coded lookup, advanced date filters
-#          and anonymization when
-#          the cleaned files carry baby_id and stay_no, and that files without
+#          probabilistic-match lookup, NA-coded lookup, advanced date filters,
+#          anonymization and the key and duplicate step of the run scripts when the
+#          cleaned files carry baby_id and stay_no, and that files without
 #          them still join on uid + facility.
 #
 # USAGE (from the sample_maker_R folder):
@@ -56,14 +56,14 @@ check("baby_id in only one of the two files stops the run",
       inherits(try(quiet(add_match_keys(adm, dis[, c("uid", "facility", "uniquekey")])), silent = TRUE), "try-error"))
 
 cat("\n2. Deduplication\n")
-ad <- quiet(resolve_duplicates(k$admissions, "ADMISSIONS"))
-dd <- quiet(resolve_duplicates(k$discharges, "DISCHARGES"))
+ad <- quiet(resolve_duplicates(k$admissions, "ADMISSIONS", k$mode))
+dd <- quiet(resolve_duplicates(k$discharges, "DISCHARGES", k$mode, resolve_forms = TRUE))
 check("admissions: nothing removed (keys unique)", ad$n_removed == 0 && nrow(ad$df) == 5)
 check("discharges: the non-primary form of a stay is not joined", dd$n_removed == 1 && !"d2" %in% dd$df$uniquekey)
 check("discharges: the primary form is kept", "d3" %in% dd$df$uniquekey)
 bad <- k$discharges; bad$stay_form_primary[bad$uniquekey == "d2"] <- TRUE
 check("two primary forms for one stay stop the run",
-      inherits(try(quiet(resolve_duplicates(bad, "DISCHARGES")), silent = TRUE), "try-error"))
+      inherits(try(quiet(resolve_duplicates(bad, "DISCHARGES", k$mode, resolve_forms = TRUE)), silent = TRUE), "try-error"))
 
 cat("\n3. Join\n")
 j <- quiet(join_data(ad$df, dd$df))
@@ -135,6 +135,74 @@ check("subsample filter: distinct rows sharing baby_id, stay_no and facility are
       sr1$n_kept == 4 && setequal(sr1$df$uniquekey, fa$uniquekey))
 check("subsample filter: overlapping ranges keep each row once, rows without baby_id included",
       sr2$n_kept == 4 && !anyDuplicated(sr2$df$uniquekey))
+
+cat("\n8. Keys and duplicate check before the join\n")
+check("deduplication without match keys stops",
+      inherits(try(quiet(resolve_duplicates(dis, "DISCHARGES", "episode")), silent = TRUE), "try-error"))
+pr <- quiet(prepare_join_inputs(adm, dis))
+check("prepare_join_inputs adds the keys and keeps the primary discharge form",
+      pr$mode == "episode" && "match_key" %in% names(pr$admissions) &&
+        !"d2" %in% pr$discharges$uniquekey && pr$dis_dedup$n_removed == 1)
+pj <- quiet(join_data(pr$admissions, pr$discharges))
+check("its output joins without repeated keys", pj$n_matched == 4)
+ua <- data.frame(uid = c("TEST-40", "TEST-40", "TEST-41", "TEST-41"), facility = "H1",
+                 uniquekey = c("u1", "u2", "u3", "u4"),
+                 datetimeadmission = c("2024-03-01 10:00:00", "2024-05-02 09:00:00",
+                                       "2024-03-05 08:00:00", "2024-03-05 08:00:00"),
+                 stringsAsFactors = FALSE)
+ud <- data.frame(uid = "TEST-41", facility = "H1", uniquekey = "v1", stringsAsFactors = FALSE)
+check("uid + facility: repeated admission key with two admission dates stops",
+      inherits(try(quiet(prepare_join_inputs(ua[1:2, ], ud)), silent = TRUE), "try-error"))
+check("uid + facility: repeated admission key with one admission date stops",
+      inherits(try(quiet(prepare_join_inputs(ua[3:4, ], ud)), silent = TRUE), "try-error"))
+ud2 <- data.frame(uid = c("TEST-42", "TEST-42"), facility = "H1", uniquekey = c("v2", "v3"),
+                  stringsAsFactors = FALSE)
+check("uid + facility: one admission and two discharges with the same key stops",
+      inherits(try(quiet(prepare_join_inputs(ua[3, ], ud2)), silent = TRUE), "try-error"))
+pu <- quiet(prepare_join_inputs(ua[c(1, 3), ], ud))
+check("uid + facility: files without repeated keys still join",
+      pu$mode == "uid" && nrow(pu$admissions) == 2 && quiet(join_data(pu$admissions, pu$discharges))$n_matched == 1)
+ups <- ud2; ups$stay_form_primary <- c(TRUE, FALSE)
+check("uid + facility: stay_form_primary without baby_id and stay_no does not resolve a repeated key",
+      inherits(try(quiet(prepare_join_inputs(ua[3, ], ups)), silent = TRUE), "try-error"))
+ea <- adm; ea$baby_id[2] <- "TEST-01.A"; ea$stay_form_primary <- c(TRUE, FALSE, TRUE, TRUE, TRUE)
+check("episode mode: a repeated admission key stops even when admissions carry stay_form_primary",
+      inherits(try(quiet(prepare_join_inputs(ea, dis)), silent = TRUE), "try-error"))
+
+cat("\n9. run_all.R on made-up files\n")
+tmp <- tempfile("runall_"); dir.create(file.path(tmp, "input_test"), recursive = TRUE)
+invisible(file.copy(file.path(ROOT, c("run_all.R", "config_sample_maker.R")), tmp))
+invisible(file.copy(file.path(ROOT, "modules"), tmp, recursive = TRUE))
+cfg <- readLines(file.path(tmp, "config_sample_maker.R"))
+cfg <- sub('cleaning_pipeline_output_dir *= *"[^"]*"', 'cleaning_pipeline_output_dir = "input_test"', cfg)
+writeLines(cfg, file.path(tmp, "config_sample_maker.R"))
+put <- function(stem, df) {
+  dir.create(file.path(tmp, "input_test", stem))
+  write.csv(df, file.path(tmp, "input_test", stem, paste0(stem, "_cleaned.csv")), row.names = FALSE)
+}
+# The later admission keeps TEST-50 inside the default window (last date minus one month).
+put("zim_db_admissions_20240601", data.frame(uid = c("TEST-50", "TEST-51"), facility = "H1", uniquekey = c("w1", "w2"),
+                                             datetimeadmission = c("2024-03-01 10:00:00", "2024-06-01 10:00:00")))
+put("zim_db_discharges_20240601", data.frame(uid = c("TEST-50", "TEST-50"), facility = "H1",
+                                             uniquekey = c("x1", "x2")))
+old_wd <- setwd(tmp)
+out <- suppressWarnings(system2(file.path(R.home("bin"), "Rscript"), "run_all.R", stdout = TRUE, stderr = TRUE))
+setwd(old_wd)
+status <- attr(out, "status"); if (is.null(status)) status <- 0L
+check("a repeated uid + facility discharge key stops the join with the [dedup] message",
+      any(grepl("[dedup] DISCHARGES: 1 match key(s) occur more than once", out, fixed = TRUE)) &&
+        any(grepl("0/1 succeeded", out, fixed = TRUE)))
+check("run_all.R from Rscript exits with status 1 when a join fails", identical(as.integer(status), 1L))
+check("no master file is written for the failed join",
+      length(list.files(file.path(tmp, "outputs"), pattern = "master_joined", recursive = TRUE)) == 0)
+unlink(tmp, recursive = TRUE)
+
+for (runner in c("run_all.R", "run_sample_maker.R")) {
+  src <- readLines(file.path(ROOT, runner))
+  code <- src[!grepl("^\\s*#", src)]
+  check(sprintf("%s uses prepare_join_inputs and does not call resolve_duplicates itself", runner),
+        any(grepl("prepare_join_inputs\\(", code)) && !any(grepl("resolve_duplicates\\(", code)))
+}
 
 cat(sprintf("\n=== %d test(s): %d passed, %d failed ===\n", n_pass + n_fail, n_pass, n_fail))
 quit(status = if (n_fail > 0) 1 else 0)

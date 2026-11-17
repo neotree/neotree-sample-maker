@@ -407,10 +407,11 @@ for (jr in join_runs) {
 
     # STEP 6 -- Deduplicate
     cat("STEP 6  -- Deduplicating\n")
-    adm_dedup  <- resolve_duplicates(admissions, "ADMISSIONS")
-    admissions <- adm_dedup$df
-    dis_dedup  <- resolve_duplicates(discharges, "DISCHARGES")
-    discharges <- dis_dedup$df
+    prepared   <- prepare_join_inputs(admissions, discharges)
+    admissions <- prepared$admissions
+    discharges <- prepared$discharges
+    adm_dedup  <- prepared$adm_dedup
+    dis_dedup  <- prepared$dis_dedup
 
     # STEP 7 -- Join
     cat("STEP 7  -- Joining admissions to discharges\n")
@@ -539,5 +540,9 @@ if (n_ok > 0) {
   }
   cat("\n")
 }
+
+# From Rscript, a failed join gives exit status 1; in an interactive session
+# (RStudio) the session is left open and the summary above reports failures.
+if (n_fail > 0 && !interactive()) quit(save = "no", status = 1)
 
 invisible(batch_results)

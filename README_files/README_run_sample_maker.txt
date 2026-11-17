@@ -23,7 +23,7 @@ WHAT IT DOES
    3    Parse datetimeadmission                          filter_data.R
    4    Resolve the admission date window                filter_data.R
    5    Keep admissions inside the window                filter_data.R
-   6    Look for duplicate keys in each file             deduplicator.R
+   6    Add the match key and resolve repeated keys      deduplicator.R
    7    Join on the match key                            joiner.R
    8    Build master_joined                              master_builder.R
    9    Choose the variables for probabilistic matching  prob_matcher.R

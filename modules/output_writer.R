@@ -273,9 +273,9 @@ write_outputs <- function(cfg, ps) {
   # [4] Deduplication
   s4 <- c(
     sep_thin, "  [4]  DEDUPLICATION", sep_thin, "",
-    sprintf("  Admissions -- duplicate uid+facility keys : %d  (%d row(s) removed)",
+    sprintf("  Admissions -- repeated match keys : %d  (%d row(s) removed)",
             adr$n_dup_keys, adr$n_removed),
-    sprintf("  Discharges -- duplicate uid+facility keys : %d  (%d row(s) removed)",
+    sprintf("  Discharges -- repeated match keys : %d  (%d row(s) removed)",
             ddr$n_dup_keys, ddr$n_removed),
     if (adr$n_dup_keys + ddr$n_dup_keys > 0)
       sprintf("  Duplicates log : %s", basename(paths$dup_log))
@@ -287,7 +287,7 @@ write_outputs <- function(cfg, ps) {
   pct_d <- function(n) sprintf("%.1f%%", 100 * n / jr$n_dis_total)
 
   s5 <- c(
-    sep_thin, "  [5]  DIRECT MATCHING SUMMARY  (uid + facility key)", sep_thin, "",
+    sep_thin, "  [5]  DIRECT MATCHING SUMMARY  (match key)", sep_thin, "",
     sprintf("  %-35s  %8s  %8s  %8s", "", "N", "% of adm", "% of dis"),
     sprintf("  %-35s  %8s  %8s  %8s",
             strrep("-", 35), strrep("-", 8), strrep("-", 8), strrep("-", 8)),
