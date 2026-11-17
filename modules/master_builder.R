@@ -147,15 +147,9 @@ build_master_joined_extended <- function(master_joined,
     # Identify the row by adm_row_idx: this maps to unmatched_adm_df row ai,
     # which corresponds to the row in master_joined where match_type == "unmatched"
     # and uid + facility match.
-    uid_ai  <- unmatched_adm_df$uid[ai]
-    fac_ai  <- unmatched_adm_df$facility[ai]
-
-    uid_match <- if (is.na(uid_ai))  is.na(master_joined$uid)  else
-                   !is.na(master_joined$uid)  & master_joined$uid  == uid_ai
-    fac_match <- if (is.na(fac_ai)) is.na(master_joined$facility) else
-                   !is.na(master_joined$facility) & master_joined$facility == fac_ai
-
-    mj_mask <- master_joined$match_type == "unmatched" & uid_match & fac_match
+    key_ai  <- unmatched_adm_df$match_key[ai]
+    mj_mask <- master_joined$match_type == "unmatched" &
+               !is.na(master_joined$match_key) & master_joined$match_key == key_ai
 
     if (sum(mj_mask) != 1) {
       # Fallback: rebuild from unmatched_adm_df row
@@ -192,13 +186,9 @@ build_master_joined_extended <- function(master_joined,
   #   * unmatched rows     (those NOT in the prob assignments)
   # -------------------------------------------------------------------------
 
-  # UIDs of admissions that were prob-matched
-  prob_adm_uids <- assignments$adm_uid
-  prob_adm_facs <- assignments$adm_facility
-
-  # Key for lookup (uid_facility)
-  mj_key <- paste(master_joined$uid, master_joined$facility, sep = "_")
-  prob_key <- paste(prob_adm_uids, prob_adm_facs, sep = "_")
+  # Match keys of admissions that were prob-matched
+  mj_key   <- master_joined$match_key
+  prob_key <- unmatched_adm_df$match_key[assignments$adm_row_idx]
 
   direct_rows    <- master_joined[master_joined$match_type == "direct_match", ]
   still_unmatched <- master_joined[

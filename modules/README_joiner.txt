@@ -4,7 +4,9 @@
 
 PURPOSE
 -------
-Matches admissions to discharges on uid and facility.
+Matches admissions to discharges on a match key: baby_id, stay_no and
+facility when both files carry baby_id and stay_no (files cleaned in episode
+mode), otherwise uid and facility.
 
 
 WHEN IT RUNS
@@ -15,14 +17,18 @@ filter and the duplicate check.
 
 WHAT IT DOES
 ------------
-1. Adds match_key to both data frames: uid, an underscore, facility.
+1. Uses the match_key added by add_match_keys() before the duplicate check,
+   or adds it: baby_id, stay_no and facility joined by underscores when both
+   data frames have baby_id and stay_no, otherwise uid and facility. A row
+   without baby_id or stay_no gets a key of its own and is not matched
+   directly. The join stops if a key still occurs more than once in either
+   data frame, or if baby_id and stay_no are present in only one of the two
+   files.
 2. Splits the keys into three sets: keys in both data frames (matched), keys
    only in admissions, keys only in discharges.
-3. Builds the matched pairs: the matched admissions and the matched
-   discharges are each sorted by match_key and placed side by side. A
-   discharge column whose name also exists in admissions gets the suffix _dis.
-   match_key appears once. The side-by-side placement relies on each key
-   occurring once in each data frame.
+3. Builds the matched pairs: each matched admission is placed beside the
+   discharge with the same match_key. A discharge column whose name also
+   exists in admissions gets the suffix _dis. match_key appears once.
 4. Counts the values of the outcome column among the matched pairs, and the
    matched pairs by facility, for the statistics report. The outcome column is
    neotreeoutcome, or neotreeoutcome_dis if the first is absent.
@@ -30,8 +36,9 @@ WHAT IT DOES
 
 INPUTS
 ------
-  admissions   Data frame with uid and facility (filtered admissions).
-  discharges   Data frame with uid and facility (all discharges).
+  admissions   Data frame with uid and facility, and baby_id and stay_no when
+               cleaned in episode mode (filtered admissions).
+  discharges   Data frame with the same columns (all discharges).
 
 
 OUTPUTS

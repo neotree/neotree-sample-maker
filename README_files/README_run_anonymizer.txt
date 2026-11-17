@@ -19,16 +19,17 @@ For each input file the script loads the CSV, calls anonymize_dataset() from
 modules/anonymizer.R, and writes the result. The rules are in
 modules/README_anonymizer.txt. In short:
 
-  - uid, uniquekey, match_key and adm_date_parsed are removed;
+  - uid, uniquekey, match_key, baby_id, their discharge copies (uid_dis,
+    uniquekey_dis, baby_id_dis) and adm_date_parsed are removed;
   - the columns named in additional_remove are removed;
   - with convert_datetimes = TRUE, datetimeadmission and datetimedischarge
     are replaced by adm_yearmonth and dis_yearmonth (YYYY-MM);
   - with add_anon_id = TRUE, a column anon_id numbering the rows from 1 is
     added as the first column.
 
-Columns are matched by exact name. Copies that carry the _dis suffix in the
-master datasets, such as uid_dis, are removed only if they are listed in
-additional_remove.
+Columns are matched by exact name. Other copies that carry the _dis suffix
+in the master datasets, such as facility_dis, are removed only if they are
+listed in additional_remove.
 
 
 SETTINGS

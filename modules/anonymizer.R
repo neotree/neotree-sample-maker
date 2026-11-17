@@ -29,8 +29,12 @@
 # These allow a record to be linked back to a specific patient.
 ANON_REMOVE_ALWAYS <- c(
   "uid",          # patient identifier
+  "uid_dis",      # discharge copy of uid in joined files
   "uniquekey",    # Neotree record key
-  "match_key"     # uid + facility composite key (derived identifier)
+  "uniquekey_dis",# discharge copy of uniquekey in joined files
+  "match_key",    # composite key built from uid or baby_id (derived identifier)
+  "baby_id",      # uid plus a letter (derived identifier)
+  "baby_id_dis"   # discharge copy of baby_id in joined files
 )
 
 # Pipeline-internal date column: always removed.

@@ -101,10 +101,11 @@ SUBSAMPLE_CONFIG <- list(
   #
   # Set include = TRUE for each dataset type to be produced.
   # Mandatory columns are always retained:
-  #   admissions : uid, facility, uniquekey, datetimeadmission
-  #   discharges : uid, facility, uniquekey
+  #   admissions : uid, facility, uniquekey, datetimeadmission, baby_id, stay_no
+  #   discharges : uid, facility, uniquekey, baby_id, stay_no
   #   neolab     : uid, facility, uniquekey, datebct
-  #   maternal   : uid, facility, uniquekey, dateadmission
+  #   maternal   : uid, facility, uniquekey, dateadmission, baby_id
+  #   (baby_id and stay_no only when the cleaned file has them)
   #
 
   datasets = list(

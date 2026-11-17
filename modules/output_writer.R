@@ -628,19 +628,28 @@ write_outputs <- function(cfg, ps) {
 #   All join/match work runs on the standard blank-NA data.  After the standard
 #   master files are built, these helpers substitute data column values with
 #   their na_coded counterparts (sentinel codes instead of blank NA) using a
-#   vectorised uid+facility lookup.
+#   vectorised lookup on uid + facility + uniquekey (uid + facility when a
+#   file has no uniquekey).
 #
 #   Pipeline-generated columns (match_type, match_key, adm_date_parsed,
 #   prob_match_similarity) are kept unchanged from the standard master_joined.
 #
 # Correctness note:
-#   uid+facility uniqueness is guaranteed post-deduplication, so match() returns
-#   the correct row.  Date filtering is automatically respected because only rows
+#   uid + facility + uniquekey identifies one row of a cleaned file in both
+#   deduplication modes (uid + facility alone does not in episode mode, where
+#   one uid can hold several babies and stays), so match() returns the
+#   correct row.  Date filtering is automatically respected because only rows
 #   present in master_joined are looked up; unfiltered rows are simply absent.
 # ==============================================================================
 
 .NA_CODED_PIPELINE_COLS <- c("match_type", "prob_match_similarity",
                               "match_key", "adm_date_parsed")
+
+# Row key used to find a master row in a na_coded file
+.nc_key <- function(uid, facility, uniquekey, sep = "\x01") {
+  if (is.null(uniquekey)) paste(uid, facility, sep = sep) else paste(uid, facility, uniquekey, sep = sep)
+}
+.has_ukey <- function(...) all(vapply(list(...), function(d) "uniquekey" %in% names(d), logical(1)))
 
 # Build dis_col_map: master_joined column name -> original discharge column name.
 # Discharge columns that overlap with admission columns carry a "_dis" suffix in
@@ -661,8 +670,9 @@ write_outputs <- function(cfg, ps) {
 
 # ------------------------------------------------------------------------------
 # .build_na_coded_master_joined()
-# Handles direct_match and unmatched rows (uid+facility is the same on both
-# admission and discharge sides for direct_match, so a single key lookup works).
+# Handles direct_match and unmatched rows.  The admission row is found by the
+# admission uid + facility + uniquekey, the discharge row by the discharge
+# copies of those columns (uid_dis, facility_dis, uniquekey_dis).
 # ------------------------------------------------------------------------------
 .build_na_coded_master_joined <- function(master_joined, adm_na_coded, dis_na_coded) {
 
@@ -671,12 +681,15 @@ write_outputs <- function(cfg, ps) {
                                    names(adm_na_coded),
                                    names(dis_na_coded))
 
-  mj_key  <- paste(master_joined$uid, master_joined$facility, sep = SEP)
-  adm_key <- paste(adm_na_coded$uid,  adm_na_coded$facility,  sep = SEP)
-  dis_key <- paste(dis_na_coded$uid,  dis_na_coded$facility,  sep = SEP)
+  uk      <- .has_ukey(master_joined, adm_na_coded, dis_na_coded) &&
+             all(c("uid_dis", "facility_dis", "uniquekey_dis") %in% names(master_joined))
+  mj_key  <- .nc_key(master_joined$uid, master_joined$facility, if (uk) master_joined$uniquekey)
+  mj_dkey <- if (uk) .nc_key(master_joined$uid_dis, master_joined$facility_dis, master_joined$uniquekey_dis) else mj_key
+  adm_key <- .nc_key(adm_na_coded$uid, adm_na_coded$facility, if (uk) adm_na_coded$uniquekey)
+  dis_key <- .nc_key(dis_na_coded$uid, dis_na_coded$facility, if (uk) dis_na_coded$uniquekey)
 
   adm_idx        <- match(mj_key, adm_key)
-  dis_idx        <- match(mj_key, dis_key)
+  dis_idx        <- match(mj_dkey, dis_key)
   unmatched_mask <- master_joined$match_type == "unmatched"
 
   result <- master_joined  # start from standard: pipeline metadata cols preserved
@@ -703,7 +716,8 @@ write_outputs <- function(cfg, ps) {
 # .build_na_coded_master_joined_extended()
 # Extends .build_na_coded_master_joined() to handle prob_match rows, where the
 # discharge uid+facility differs from the admission uid+facility.  The correct
-# discharge row is identified via prob_assignments$dis_uid / dis_facility.
+# discharge row is identified via prob_assignments$dis_uid / dis_facility /
+# dis_uniquekey.
 # ------------------------------------------------------------------------------
 .build_na_coded_master_joined_extended <- function(master_joined_na_coded,
                                                     master_joined_extended,
@@ -722,14 +736,18 @@ write_outputs <- function(cfg, ps) {
                                    names(adm_na_coded),
                                    names(dis_na_coded))
 
-  adm_key <- paste(adm_na_coded$uid, adm_na_coded$facility, sep = SEP)
-  dis_key <- paste(dis_na_coded$uid, dis_na_coded$facility, sep = SEP)
+  uk <- .has_ukey(master_joined_na_coded, adm_na_coded, dis_na_coded) &&
+        all(c("adm_uniquekey", "dis_uniquekey") %in% names(prob_assignments))
+  adm_key <- .nc_key(adm_na_coded$uid, adm_na_coded$facility, if (uk) adm_na_coded$uniquekey)
+  dis_key <- .nc_key(dis_na_coded$uid, dis_na_coded$facility, if (uk) dis_na_coded$uniquekey)
 
-  prob_adm_keys <- paste(prob_assignments$adm_uid, prob_assignments$adm_facility, sep = SEP)
-  prob_dis_keys <- paste(prob_assignments$dis_uid, prob_assignments$dis_facility, sep = SEP)
+  prob_adm_keys <- .nc_key(prob_assignments$adm_uid, prob_assignments$adm_facility,
+                           if (uk) prob_assignments$adm_uniquekey)
+  prob_dis_keys <- .nc_key(prob_assignments$dis_uid, prob_assignments$dis_facility,
+                           if (uk) prob_assignments$dis_uniquekey)
 
-  mj_na_key <- paste(master_joined_na_coded$uid,
-                     master_joined_na_coded$facility, sep = SEP)
+  mj_na_key <- .nc_key(master_joined_na_coded$uid, master_joined_na_coded$facility,
+                       if (uk) master_joined_na_coded$uniquekey)
 
   # Rows that were prob-matched are promoted out of "unmatched"; keep the rest
   direct_rows     <- master_joined_na_coded[

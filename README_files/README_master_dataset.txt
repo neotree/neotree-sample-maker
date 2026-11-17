@@ -26,19 +26,21 @@ discharge.
   joined_admissions_discharges            Direct matches only.
   joined_admissions_discharges_extended   Direct and probabilistic matches.
   unmatched_admissions                    Admissions with no discharge of the
-                                          same uid and facility.
+                                          same match key.
   unmatched_discharges                    Discharges with no admission of the
-                                          same uid and facility among the
+                                          same match key among the
                                           admissions in the date window.
 
 master_joined and master_joined_extended have the same number of rows. In
 master_joined_extended the rows are ordered: direct matches, probabilistic
 matches, unmatched admissions.
 
-A direct match is an admission and a discharge with the same uid and the same
-facility. A probabilistic match is a pair accepted by the similarity rule in
-modules/README_prob_matcher.txt; its admission and discharge have different
-uid or facility values.
+A direct match is an admission and a discharge with the same match key:
+baby_id, stay_no and facility for files cleaned in episode mode, otherwise uid
+and facility. When a stay has several discharge forms, the primary form
+(stay_form_primary) is the one joined. A probabilistic match is a pair
+accepted by the similarity rule in modules/README_prob_matcher.txt; its
+admission and discharge have different uid or facility values.
 
 
 COLUMNS
@@ -51,8 +53,9 @@ COLUMNS
                             discharge column whose name also exists in the
                             admissions file has the suffix _dis, for example
                             uid_dis, facility_dis.
-  match_key                 uid and facility of the admission joined by an
-                            underscore.
+  match_key                 baby_id, stay_no and facility of the admission
+                            joined by underscores (uid and facility for files
+                            without baby_id).
   adm_date_parsed           datetimeadmission parsed as a date-time.
   match_type                direct_match, prob_match or unmatched.
                             master_joined contains only direct_match and

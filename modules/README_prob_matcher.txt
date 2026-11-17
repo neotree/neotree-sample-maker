@@ -50,7 +50,10 @@ Scoring: find_prob_candidates()
 Each unmatched admission is compared with the unmatched discharges of the same
 facility. If there is no unmatched discharge in that facility and
 prob_match_cross_facility is TRUE, it is compared with all unmatched
-discharges.
+discharges. When both files carry baby_id (cleaned in episode mode), a
+discharge with the same uid and facility as the admission is not compared:
+the cleaning pipeline has already judged that it belongs to another baby or
+stay.
 
 Score of one variable for one pair, with d the absolute difference and t the
 tolerance:

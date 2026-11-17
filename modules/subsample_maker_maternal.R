@@ -226,7 +226,7 @@
 # ==============================================================================
 .mat_select_columns <- function(df, sub_variables) {
   if (is.null(sub_variables) || length(sub_variables) == 0) return(df)
-  mandatory <- c("uid", "facility", "uniquekey", "dateadmission")
+  mandatory <- c("uid", "facility", "uniquekey", "dateadmission", "baby_id")
   all_keep  <- unique(c(mandatory, sub_variables))
   present   <- all_keep[all_keep %in% names(df)]
   missing_v <- sub_variables[!sub_variables %in% names(df)]

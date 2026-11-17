@@ -66,7 +66,7 @@
 
 # Columns always kept regardless of sub_variables setting
 SUBSAMPLE_ALWAYS_KEEP <- c(
-  "uid", "facility", "uniquekey", "datetimeadmission",
+  "uid", "facility", "uniquekey", "datetimeadmission", "baby_id", "stay_no",
   "match_key", "adm_date_parsed",
   "match_type", "prob_match_similarity"
 )
@@ -332,20 +332,14 @@ run_subsample_maker <- function(master_joined, master_joined_extended, cfg) {
       fac      <- r[1]
       start_dt <- as.POSIXct(r[2], format = "%Y-%m-%d", tz = "UTC")
       end_dt   <- as.POSIXct(paste(r[3], "23:59:59"), format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
-      df[
-        !is.na(df$adm_date_parsed) &
-        df$facility == fac &
-        df$adm_date_parsed >= start_dt &
-        df$adm_date_parsed <= end_dt,
-      ]
+      which(!is.na(df$adm_date_parsed) &
+              df$facility == fac &
+              df$adm_date_parsed >= start_dt &
+              df$adm_date_parsed <= end_dt)
     })
-    filtered <- do.call(rbind, chunks)
-    # Safety dedup: each admission (uid+facility) at most once
-    if (nrow(filtered) > 0) {
-      filtered <- filtered[
-        !duplicated(paste(filtered$uid, filtered$facility)),
-      ]
-    }
+    # Row positions of the input: a row selected by two overlapping ranges is
+    # kept once, and distinct rows are never merged.
+    filtered <- df[unique(unlist(chunks)), , drop = FALSE]
 
   } else {
     # --- SIMPLE mode ---

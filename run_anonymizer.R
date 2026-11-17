@@ -64,7 +64,8 @@ ANONYMIZER_CONFIG <- list(
 # ==============================================================================
 #
 # The module always removes a built-in set of direct identifiers:
-#   uid, uniquekey, match_key, adm_date_parsed
+#   uid, uniquekey, match_key, baby_id, their discharge copies in joined
+#   files (uid_dis, uniquekey_dis, baby_id_dis), and adm_date_parsed
 # and converts exact datetimes to year-month:
 #   datetimeadmission  ->  adm_yearmonth   (e.g. "2024-03")
 #   datetimedischarge  ->  dis_yearmonth

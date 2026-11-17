@@ -20,7 +20,8 @@ name; a column that is absent is passed over.
 
   Step  Action
   ----  ----------------------------------------------------------------------
-   1    Remove uid, uniquekey and match_key.
+   1    Remove uid, uniquekey, match_key and baby_id, and the discharge
+        copies uid_dis, uniquekey_dis and baby_id_dis.
    2    Remove adm_date_parsed.
    3    Remove the columns named in additional_remove. Names not found give a
         warning.
@@ -32,9 +33,9 @@ name; a column that is absent is passed over.
    5    If add_anon_id is TRUE: add anon_id as the first column, numbering the
         rows from 1 in their current order.
 
-Columns whose names differ from those listed, including the _dis copies in the
-master datasets (for example uid_dis), are kept unless they are named in
-additional_remove.
+Columns whose names differ from those listed, including the other _dis copies
+in the master datasets (for example facility_dis), are kept unless they are
+named in additional_remove.
 
 The lists used in steps 1, 2 and 4 are the constants ANON_REMOVE_ALWAYS,
 ANON_REMOVE_PIPELINE_COLS and ANON_DATETIME_CONVERT at the top of the module.

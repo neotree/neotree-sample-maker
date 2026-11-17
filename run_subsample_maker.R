@@ -485,10 +485,10 @@ if (cfg$source_type == "master") {
 
   # Map of config key -> list(pipeline_type, mandatory_cols)
   MANDATORY <- list(
-    admissions = c("uid", "facility", "uniquekey", "datetimeadmission"),
-    discharges = c("uid", "facility", "uniquekey"),
+    admissions = c("uid", "facility", "uniquekey", "datetimeadmission", "baby_id", "stay_no"),
+    discharges = c("uid", "facility", "uniquekey", "baby_id", "stay_no"),
     neolab     = c("uid", "facility", "uniquekey", "nuid", "datebct"),
-    maternal   = c("uid", "facility", "uniquekey", "dateadmission")
+    maternal   = c("uid", "facility", "uniquekey", "dateadmission", "baby_id")
   )
   PIPELINE_TYPE <- list(
     admissions = "admissions",

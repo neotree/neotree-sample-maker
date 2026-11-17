@@ -44,8 +44,9 @@ The same steps are applied to master_joined and to master_joined_extended.
    setting that is NULL is not applied. When either date is set, rows with no
    parsable admission date are dropped.
    Advanced mode: keeps, for each entry of sub_facility_date_ranges, the rows
-   of that facility inside its range. Each entry needs both dates. If a
-   uid and facility pair is selected more than once, the first row is kept.
+   of that facility inside its range. Each entry needs both dates. A row
+   selected by two overlapping ranges is kept once; distinct rows are never
+   merged.
    The run stops if no row is left.
 
 3. Exclusion filters. Each filter removes the rows that meet its condition.
@@ -55,9 +56,10 @@ The same steps are applied to master_joined and to master_joined_extended.
    stops the run.
 
 4. Column selection. With sub_variables set, the output keeps those columns
-   and the columns uid, facility, uniquekey, datetimeadmission, match_key,
-   adm_date_parsed, match_type and prob_match_similarity, in their original
-   order. Requested names that do not exist are reported and skipped.
+   and the columns uid, facility, uniquekey, datetimeadmission, baby_id,
+   stay_no, match_key, adm_date_parsed, match_type and prob_match_similarity
+   (those present), in their original order. Requested names that do not
+   exist are reported and skipped.
 
 5. Matched-only files. subsample_master_matched_only is the direct_match rows
    of the master subsample; subsample_master_extended_matched_only is the
@@ -123,10 +125,11 @@ stops if no type is enabled.
 4. Column selection. With a column list, the output keeps the mandatory
    columns of the type, the date column, and the listed columns:
 
-     admissions   uid, facility, uniquekey, datetimeadmission
-     discharges   uid, facility, uniquekey
+     admissions   uid, facility, uniquekey, datetimeadmission, baby_id, stay_no
+     discharges   uid, facility, uniquekey, baby_id, stay_no
      neolab       uid, facility, uniquekey, datebct, and nuid if present
-     maternal     uid, facility, uniquekey, dateadmission
+     maternal     uid, facility, uniquekey, dateadmission, baby_id
+   (baby_id and stay_no only when the cleaned file has them)
 
 5. NA-coded file. With output_na_coded = TRUE the script reads the type's
    _cleaned_na_coded.csv file and writes the rows at the same positions as

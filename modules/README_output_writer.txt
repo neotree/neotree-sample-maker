@@ -22,12 +22,14 @@ WHAT IT DOES
    rows of master_joined_extended whose match_type is not "unmatched".
    Missing values are written as empty cells.
 4. If both na_coded data frames are supplied, builds and writes the na_coded
-   master files. Rows are looked up by uid and facility in the na_coded
+   master files. Rows are looked up by uid, facility and uniquekey (the
+   discharge side by uid_dis, facility_dis and uniquekey_dis) in the na_coded
    sources, and the values of the admission and discharge columns are
    replaced by the values found there. match_type, prob_match_similarity,
    match_key and adm_date_parsed are left as they are. Discharge columns of
    unmatched rows are set to NA. For prob_match rows the discharge record is
-   looked up by the discharge uid and facility of the accepted pair. If this
+   looked up by the discharge uid, facility and uniquekey of the accepted
+   pair. If this
    step fails, a warning is printed and the run continues without these files.
 5. Writes the candidates file and the assignments file when they have rows,
    and the duplicates log when either log has rows.

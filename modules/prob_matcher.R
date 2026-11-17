@@ -196,6 +196,16 @@ find_prob_candidates <- function(unmatched_adm, unmatched_dis, var_info, cfg) {
       search_idx <- seq_len(nrow(unmatched_dis))
     }
 
+    # Episode mode: an admission and a discharge with the same uid and facility
+    # were already compared by the cleaning pipeline and judged not to belong
+    # together, so they are not offered as a probabilistic pair.
+    if (length(search_idx) > 0 && "baby_id" %in% names(unmatched_adm) && "baby_id" %in% names(unmatched_dis)) {
+      same <- !is.na(unmatched_dis$uid[search_idx]) & !is.na(unmatched_adm$uid[i]) &
+              unmatched_dis$uid[search_idx] == unmatched_adm$uid[i] &
+              unmatched_dis$facility[search_idx] == unmatched_adm$facility[i]
+      search_idx <- search_idx[!same]
+    }
+
     if (length(search_idx) == 0) next
 
     scores <- .score_candidates(
@@ -220,8 +230,10 @@ find_prob_candidates <- function(unmatched_adm, unmatched_dis, var_info, cfg) {
         overall_similarity = scores[j],
         adm_uid            = unmatched_adm$uid[i],
         adm_facility       = unmatched_adm$facility[i],
+        adm_uniquekey      = if ("uniquekey" %in% names(unmatched_adm)) as.character(unmatched_adm$uniquekey[i]) else NA_character_,
         dis_uid            = unmatched_dis$uid[dis_idx],
         dis_facility       = unmatched_dis$facility[dis_idx],
+        dis_uniquekey      = if ("uniquekey" %in% names(unmatched_dis)) as.character(unmatched_dis$uniquekey[dis_idx]) else NA_character_,
         same_facility      = identical(
           as.character(unmatched_adm$facility[i]),
           as.character(unmatched_dis$facility[dis_idx])

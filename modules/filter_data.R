@@ -182,24 +182,19 @@ apply_admission_filter <- function(admissions, date_window, cfg) {
       }
     }
 
+    # Each range selects row positions of the input; a row selected by two
+    # overlapping ranges is kept once.  Distinct records are never merged here.
     chunks <- lapply(cfg$facility_date_ranges, function(r) {
       fac      <- r[1]
       start_dt <- as.POSIXct(r[2], format = "%Y-%m-%d", tz = "UTC")
       end_dt   <- as.POSIXct(paste(r[3], "23:59:59"), format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
-      subset(
-        admissions,
-        facility == fac &
-          !is.na(adm_date_parsed) &
-          adm_date_parsed >= start_dt &
-          adm_date_parsed <= end_dt
-      )
+      which(admissions$facility == fac &
+              !is.na(admissions$adm_date_parsed) &
+              admissions$adm_date_parsed >= start_dt &
+              admissions$adm_date_parsed <= end_dt)
     })
 
-    admissions_filtered <- do.call(rbind, chunks)
-    # Safety dedup in case facility_date_ranges entries overlap
-    admissions_filtered <- admissions_filtered[
-      !duplicated(paste(admissions_filtered$uid, admissions_filtered$facility)),
-    ]
+    admissions_filtered <- admissions[unique(unlist(chunks)), , drop = FALSE]
 
     filter_desc <- c(
       "  Mode         : Advanced (per-facility date ranges)",

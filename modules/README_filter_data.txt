@@ -41,8 +41,9 @@ Filter. apply_admission_filter() keeps:
   Advanced mode   For each entry c("FACILITY", "start", "end") of
                   facility_date_ranges, the admissions of that facility with
                   a date in the range. Each entry must have three elements,
-                  and both dates must be given. If the same uid and facility
-                  is selected more than once, the first row is kept.
+                  and both dates must be given. A row selected by two
+                  overlapping ranges is kept once; distinct rows are never
+                  merged.
 
 The function stops if no admission is left, or if advanced mode is on and
 facility_date_ranges is empty.

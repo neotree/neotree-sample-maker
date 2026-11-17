@@ -1,11 +1,19 @@
 ################################################################################
 # Neotree Sample Maker -- Module 01: Join Admissions & Discharges
 # FILE:    modules/joiner.R
-# PURPOSE: Match admissions to discharges using uid + facility as the unique
-#          key, producing three output datasets.
+# PURPOSE: Match admissions to discharges on a match key, producing three
+#          output datasets.
+#
+# MATCH KEY
+#   Cleaned files made in episode mode carry baby_id and stay_no: the key is
+#   baby_id + stay_no + facility.  Otherwise the key is uid + facility.  The
+#   same kind of key is used on both sides.  Rows without baby_id or stay_no
+#   get a key of their own and are never matched directly.  The keys are
+#   added by add_match_keys() before deduplication; join_data() adds them if
+#   they are missing.
 #
 # MATCHING LOGIC
-#   1. A match_key column (uid + "_" + facility) is added to both data frames.
+#   1. A match_key column is added to both data frames (see MATCH KEY).
 #   2. Set intersection  -> matched pairs
 #   3. Admissions with no discharge found    -> unmatched_admissions
 #      (baby still admitted, or discharge record missing / entered under
@@ -19,19 +27,56 @@
 #   Discharge columns that share a name with an admission column (except
 #   match_key) are suffixed with "_dis" to avoid ambiguity.
 #
-# FUNCTION EXPORTED
+# FUNCTIONS EXPORTED
+#   match_key_mode(admissions, discharges) -> "episode" or "uid"
+#   add_match_keys(admissions, discharges) -> list(admissions, discharges, mode)
 #   join_data(admissions, discharges)
 #     -> returns list(matched_pairs, unmatched_admissions, unmatched_discharges,
 #                    n_matched, n_unmatched_adm, n_unmatched_dis,
 #                    n_adm_total, n_dis_total)
 ################################################################################
 
+match_key_mode <- function(admissions, discharges) {
+  ep_cols <- c("baby_id", "stay_no")
+  n_adm <- sum(ep_cols %in% names(admissions)); n_dis <- sum(ep_cols %in% names(discharges))
+  if (n_adm == 2 && n_dis == 2) return("episode")
+  if (n_adm == 0 && n_dis == 0) return("uid")
+  stop(paste("[joiner] baby_id and stay_no are present in only one of the two files (or only one of them in a file).",
+             "Clean admissions and discharges with the same deduplication mode before joining."))
+}
+
+.make_match_key <- function(df, mode, side) {
+  if (mode == "episode") {
+    k    <- paste(df$baby_id, df$stay_no, df$facility, sep = "_")
+    none <- which(is.na(df$baby_id) | is.na(df$stay_no))
+    k[none] <- paste0("nokey_", side, "_", none)
+    k
+  } else {
+    paste(df$uid, df$facility, sep = "_")
+  }
+}
+
+add_match_keys <- function(admissions, discharges) {
+  mode <- match_key_mode(admissions, discharges)
+  cat(sprintf("[joiner] Creating match keys (%s)...\n",
+              if (mode == "episode") "baby_id + stay_no + facility" else "uid + facility"))
+  admissions$match_key <- .make_match_key(admissions, mode, "adm")
+  discharges$match_key <- .make_match_key(discharges, mode, "dis")
+  list(admissions = admissions, discharges = discharges, mode = mode)
+}
+
 join_data <- function(admissions, discharges) {
 
-  cat("[joiner] Creating match keys (uid + facility)...\n")
-
-  admissions$match_key <- paste(admissions$uid, admissions$facility, sep = "_")
-  discharges$match_key <- paste(discharges$uid, discharges$facility, sep = "_")
+  if (!"match_key" %in% names(admissions) || !"match_key" %in% names(discharges)) {
+    k <- add_match_keys(admissions, discharges)
+    admissions <- k$admissions; discharges <- k$discharges
+  }
+  for (side in list(list(admissions, "admissions"), list(discharges, "discharges"))) {
+    n_dup <- sum(duplicated(side[[1]]$match_key))
+    if (n_dup > 0)
+      stop(sprintf("[joiner] %d repeated match key(s) in %s after deduplication; the join would pair the wrong rows.",
+                   n_dup, side[[2]]))
+  }
 
   n_adm_unique <- length(unique(admissions$match_key))
   n_dis_unique <- length(unique(discharges$match_key))
@@ -77,9 +122,9 @@ join_data <- function(admissions, discharges) {
   # ---------------------------------------------------------------------------
   cat("[joiner] Building matched pairs dataset...\n")
 
-  # Sort both by match_key so rows align correctly after merging
+  # Align each discharge row with its admission row by match_key
   adm_matched <- adm_matched[order(adm_matched$match_key), ]
-  dis_matched <- dis_matched[order(dis_matched$match_key), ]
+  dis_matched <- dis_matched[match(adm_matched$match_key, dis_matched$match_key), ]
 
   # Rename overlapping discharge columns (except match_key) -> add _dis suffix
   adm_cols <- names(adm_matched)

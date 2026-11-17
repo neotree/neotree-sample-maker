@@ -5,7 +5,7 @@
   A single-file compilation of every documentation file shipped with the
   Neotree Sample Maker.
 
-  Version   : 2.0.0  (see CHANGELOG.md)
+  Version   : 2.0.1  (see CHANGELOG.md)
   Source    : the README and documentation files in this repository,
               reproduced here in full.
 
@@ -95,7 +95,7 @@ PART IV -- MODULE REFERENCE
   4.2   loader.R -- load and validate data
   4.3   filter_data.R -- date and facility filtering
   4.4   deduplicator.R -- resolve duplicate keys
-  4.5   joiner.R -- direct uid + facility matching
+  4.5   joiner.R -- direct matching on the match key
   4.6   prob_matcher.R -- probabilistic matching engine
   4.7   master_builder.R -- assemble master datasets
   4.8   output_writer.R -- write outputs and reports
@@ -480,7 +480,7 @@ WHAT IT DOES
    4    Resolve the admission date window                filter_data.R
    5    Keep admissions inside the window                filter_data.R
    6    Look for duplicate keys in each file             deduplicator.R
-   7    Join on uid + facility                           joiner.R
+   7    Join on the match key                            joiner.R
    8    Build master_joined                              master_builder.R
    9    Choose the variables for probabilistic matching  prob_matcher.R
   10    Score unmatched admissions against unmatched
@@ -602,8 +602,9 @@ The same steps are applied to master_joined and to master_joined_extended.
    setting that is NULL is not applied. When either date is set, rows with no
    parsable admission date are dropped.
    Advanced mode: keeps, for each entry of sub_facility_date_ranges, the rows
-   of that facility inside its range. Each entry needs both dates. If a
-   uid and facility pair is selected more than once, the first row is kept.
+   of that facility inside its range. Each entry needs both dates. A row
+   selected by two overlapping ranges is kept once; distinct rows are never
+   merged.
    The run stops if no row is left.
 
 3. Exclusion filters. Each filter removes the rows that meet its condition.
@@ -613,9 +614,10 @@ The same steps are applied to master_joined and to master_joined_extended.
    stops the run.
 
 4. Column selection. With sub_variables set, the output keeps those columns
-   and the columns uid, facility, uniquekey, datetimeadmission, match_key,
-   adm_date_parsed, match_type and prob_match_similarity, in their original
-   order. Requested names that do not exist are reported and skipped.
+   and the columns uid, facility, uniquekey, datetimeadmission, baby_id,
+   stay_no, match_key, adm_date_parsed, match_type and prob_match_similarity
+   (those present), in their original order. Requested names that do not
+   exist are reported and skipped.
 
 5. Matched-only files. subsample_master_matched_only is the direct_match rows
    of the master subsample; subsample_master_extended_matched_only is the
@@ -681,10 +683,11 @@ stops if no type is enabled.
 4. Column selection. With a column list, the output keeps the mandatory
    columns of the type, the date column, and the listed columns:
 
-     admissions   uid, facility, uniquekey, datetimeadmission
-     discharges   uid, facility, uniquekey
+     admissions   uid, facility, uniquekey, datetimeadmission, baby_id, stay_no
+     discharges   uid, facility, uniquekey, baby_id, stay_no
      neolab       uid, facility, uniquekey, datebct, and nuid if present
-     maternal     uid, facility, uniquekey, dateadmission
+     maternal     uid, facility, uniquekey, dateadmission, baby_id
+   (baby_id and stay_no only when the cleaned file has them)
 
 5. NA-coded file. With output_na_coded = TRUE the script reads the type's
    _cleaned_na_coded.csv file and writes the rows at the same positions as
@@ -748,16 +751,17 @@ For each input file the script loads the CSV, calls anonymize_dataset() from
 modules/anonymizer.R, and writes the result. The rules are in
 modules/README_anonymizer.txt. In short:
 
-  - uid, uniquekey, match_key and adm_date_parsed are removed;
+  - uid, uniquekey, match_key, baby_id, their discharge copies (uid_dis,
+    uniquekey_dis, baby_id_dis) and adm_date_parsed are removed;
   - the columns named in additional_remove are removed;
   - with convert_datetimes = TRUE, datetimeadmission and datetimedischarge
     are replaced by adm_yearmonth and dis_yearmonth (YYYY-MM);
   - with add_anon_id = TRUE, a column anon_id numbering the rows from 1 is
     added as the first column.
 
-Columns are matched by exact name. Copies that carry the _dis suffix in the
-master datasets, such as uid_dis, are removed only if they are listed in
-additional_remove.
+Columns are matched by exact name. Other copies that carry the _dis suffix
+in the master datasets, such as facility_dis, are removed only if they are
+listed in additional_remove.
 
 
 SETTINGS
@@ -930,19 +934,21 @@ discharge.
   joined_admissions_discharges            Direct matches only.
   joined_admissions_discharges_extended   Direct and probabilistic matches.
   unmatched_admissions                    Admissions with no discharge of the
-                                          same uid and facility.
+                                          same match key.
   unmatched_discharges                    Discharges with no admission of the
-                                          same uid and facility among the
+                                          same match key among the
                                           admissions in the date window.
 
 master_joined and master_joined_extended have the same number of rows. In
 master_joined_extended the rows are ordered: direct matches, probabilistic
 matches, unmatched admissions.
 
-A direct match is an admission and a discharge with the same uid and the same
-facility. A probabilistic match is a pair accepted by the similarity rule in
-modules/README_prob_matcher.txt; its admission and discharge have different
-uid or facility values.
+A direct match is an admission and a discharge with the same match key:
+baby_id, stay_no and facility for files cleaned in episode mode, otherwise uid
+and facility. When a stay has several discharge forms, the primary form
+(stay_form_primary) is the one joined. A probabilistic match is a pair
+accepted by the similarity rule in modules/README_prob_matcher.txt; its
+admission and discharge have different uid or facility values.
 
 
 COLUMNS
@@ -955,8 +961,9 @@ COLUMNS
                             discharge column whose name also exists in the
                             admissions file has the suffix _dis, for example
                             uid_dis, facility_dis.
-  match_key                 uid and facility of the admission joined by an
-                            underscore.
+  match_key                 baby_id, stay_no and facility of the admission
+                            joined by underscores (uid and facility for files
+                            without baby_id).
   adm_date_parsed           datetimeadmission parsed as a date-time.
   match_type                direct_match, prob_match or unmatched.
                             master_joined contains only direct_match and
@@ -1462,8 +1469,9 @@ Filter. apply_admission_filter() keeps:
   Advanced mode   For each entry c("FACILITY", "start", "end") of
                   facility_date_ranges, the admissions of that facility with
                   a date in the range. Each entry must have three elements,
-                  and both dates must be given. If the same uid and facility
-                  is selected more than once, the first row is kept.
+                  and both dates must be given. A row selected by two
+                  overlapping ranges is kept once; distinct rows are never
+                  merged.
 
 The function stops if no admission is left, or if advanced mode is on and
 facility_date_ranges is empty.
@@ -1527,12 +1535,17 @@ admissions and once for discharges.
 
 WHAT IT DOES
 ------------
-The function reads the column match_key (uid and facility joined by an
-underscore). For each key that occurs more than once:
+The function reads the column match_key (see joiner.R). For each key that
+occurs more than once:
 
 1. It counts the NA values in each row of the group.
-2. It keeps the row with the fewest NA values; on a tie, the first. The other
-   rows are removed.
+2. If the data frame has a stay_form_primary column and exactly one row of the
+   group is marked TRUE (several discharge forms of one stay, cleaned in
+   episode mode), it keeps that row; the other forms are not joined and stay
+   in the cleaned discharge file. If the column exists but the group does not
+   have exactly one row marked TRUE, the run stops. Without the column it
+   keeps the row with the fewest NA values; on a tie, the first. The other
+   rows are left out of the join.
 3. If the data frame has a datetimeadmission column and more than one row of
    the group has a non-empty value in it, the group is flagged
    possible_readmission and a message is printed. Flagged groups are resolved
@@ -1541,8 +1554,8 @@ underscore). For each key that occurs more than once:
 Every row of every duplicate group is written to the log.
 
 A data frame that has no match_key column is returned unchanged, with zero
-duplicates reported. The run scripts call this function before join_data()
-adds match_key.
+duplicates reported. The run scripts add match_key with add_match_keys()
+before calling this function.
 
 
 INPUTS
@@ -1559,7 +1572,8 @@ A list:
   df           Data frame with the removed rows left out.
   log          Data frame, one row per record in a duplicate group; empty when
                there are none. Columns: source, match_key, row_index_in_file
-               (position in df), na_count, action (KEPT or REMOVED),
+               (position in df), na_count, action (KEPT, REMOVED, or NOT
+               JOINED (other form of the same stay)),
                possible_readmission.
   n_dup_keys   Number of keys that occurred more than once.
   n_removed    Number of rows removed.
@@ -1574,7 +1588,7 @@ resolve_duplicates(df, label)
 
 
 ================================================================================
-  4.5  joiner.R -- direct uid + facility matching
+  4.5  joiner.R -- direct matching on the match key
 ================================================================================
   Source file: modules/README_joiner.txt
 ================================================================================
@@ -1585,7 +1599,9 @@ resolve_duplicates(df, label)
 
 PURPOSE
 -------
-Matches admissions to discharges on uid and facility.
+Matches admissions to discharges on a match key: baby_id, stay_no and
+facility when both files carry baby_id and stay_no (files cleaned in episode
+mode), otherwise uid and facility.
 
 
 WHEN IT RUNS
@@ -1596,14 +1612,18 @@ filter and the duplicate check.
 
 WHAT IT DOES
 ------------
-1. Adds match_key to both data frames: uid, an underscore, facility.
+1. Uses the match_key added by add_match_keys() before the duplicate check,
+   or adds it: baby_id, stay_no and facility joined by underscores when both
+   data frames have baby_id and stay_no, otherwise uid and facility. A row
+   without baby_id or stay_no gets a key of its own and is not matched
+   directly. The join stops if a key still occurs more than once in either
+   data frame, or if baby_id and stay_no are present in only one of the two
+   files.
 2. Splits the keys into three sets: keys in both data frames (matched), keys
    only in admissions, keys only in discharges.
-3. Builds the matched pairs: the matched admissions and the matched
-   discharges are each sorted by match_key and placed side by side. A
-   discharge column whose name also exists in admissions gets the suffix _dis.
-   match_key appears once. The side-by-side placement relies on each key
-   occurring once in each data frame.
+3. Builds the matched pairs: each matched admission is placed beside the
+   discharge with the same match_key. A discharge column whose name also
+   exists in admissions gets the suffix _dis. match_key appears once.
 4. Counts the values of the outcome column among the matched pairs, and the
    matched pairs by facility, for the statistics report. The outcome column is
    neotreeoutcome, or neotreeoutcome_dis if the first is absent.
@@ -1611,8 +1631,9 @@ WHAT IT DOES
 
 INPUTS
 ------
-  admissions   Data frame with uid and facility (filtered admissions).
-  discharges   Data frame with uid and facility (all discharges).
+  admissions   Data frame with uid and facility, and baby_id and stay_no when
+               cleaned in episode mode (filtered admissions).
+  discharges   Data frame with the same columns (all discharges).
 
 
 OUTPUTS
@@ -1696,7 +1717,10 @@ Scoring: find_prob_candidates()
 Each unmatched admission is compared with the unmatched discharges of the same
 facility. If there is no unmatched discharge in that facility and
 prob_match_cross_facility is TRUE, it is compared with all unmatched
-discharges.
+discharges. When both files carry baby_id (cleaned in episode mode), a
+discharge with the same uid and facility as the admission is not compared:
+the cleaning pipeline has already judged that it belongs to another baby or
+stay.
 
 Score of one variable for one pair, with d the absolute difference and t the
 tolerance:
@@ -1805,8 +1829,8 @@ matched pairs, followed by match_type and prob_match_similarity.
 build_master_joined_extended() starts from master_joined. With no accepted
 pair it returns master_joined as it is. Otherwise, for each accepted pair:
 
-1. It takes the unmatched row of master_joined with the uid and facility of
-   the pair's admission. If there is not exactly one such row, it rebuilds the
+1. It takes the unmatched row of master_joined with the match_key of the
+   pair's admission. If there is not exactly one such row, it rebuilds the
    row from the unmatched admissions data frame.
 2. It fills the discharge columns from the pair's discharge record. Discharge
    columns are the columns of master_joined that are not admission columns,
@@ -1872,12 +1896,14 @@ WHAT IT DOES
    rows of master_joined_extended whose match_type is not "unmatched".
    Missing values are written as empty cells.
 4. If both na_coded data frames are supplied, builds and writes the na_coded
-   master files. Rows are looked up by uid and facility in the na_coded
+   master files. Rows are looked up by uid, facility and uniquekey (the
+   discharge side by uid_dis, facility_dis and uniquekey_dis) in the na_coded
    sources, and the values of the admission and discharge columns are
    replaced by the values found there. match_type, prob_match_similarity,
    match_key and adm_date_parsed are left as they are. Discharge columns of
    unmatched rows are set to NA. For prob_match rows the discharge record is
-   looked up by the discharge uid and facility of the accepted pair. If this
+   looked up by the discharge uid, facility and uniquekey of the accepted
+   pair. If this
    step fails, a warning is printed and the run continues without these files.
 5. Writes the candidates file and the assignments file when they have rows,
    and the duplicates log when either log has rows.
@@ -2090,7 +2116,8 @@ name; a column that is absent is passed over.
 
   Step  Action
   ----  ----------------------------------------------------------------------
-   1    Remove uid, uniquekey and match_key.
+   1    Remove uid, uniquekey, match_key and baby_id, and the discharge
+        copies uid_dis, uniquekey_dis and baby_id_dis.
    2    Remove adm_date_parsed.
    3    Remove the columns named in additional_remove. Names not found give a
         warning.
@@ -2102,9 +2129,9 @@ name; a column that is absent is passed over.
    5    If add_anon_id is TRUE: add anon_id as the first column, numbering the
         rows from 1 in their current order.
 
-Columns whose names differ from those listed, including the _dis copies in the
-master datasets (for example uid_dis), are kept unless they are named in
-additional_remove.
+Columns whose names differ from those listed, including the other _dis copies
+in the master datasets (for example facility_dis), are kept unless they are
+named in additional_remove.
 
 The lists used in steps 1, 2 and 4 are the constants ANON_REMOVE_ALWAYS,
 ANON_REMOVE_PIPELINE_COLS and ANON_DATETIME_CONVERT at the top of the module.

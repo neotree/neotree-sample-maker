@@ -27,8 +27,8 @@ matched pairs, followed by match_type and prob_match_similarity.
 build_master_joined_extended() starts from master_joined. With no accepted
 pair it returns master_joined as it is. Otherwise, for each accepted pair:
 
-1. It takes the unmatched row of master_joined with the uid and facility of
-   the pair's admission. If there is not exactly one such row, it rebuilds the
+1. It takes the unmatched row of master_joined with the match_key of the
+   pair's admission. If there is not exactly one such row, it rebuilds the
    row from the unmatched admissions data frame.
 2. It fills the discharge columns from the pair's discharge record. Discharge
    columns are the columns of master_joined that are not admission columns,
