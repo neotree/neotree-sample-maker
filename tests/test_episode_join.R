@@ -169,9 +169,9 @@ ea <- adm; ea$baby_id[2] <- "TEST-01.A"; ea$stay_form_primary <- c(TRUE, FALSE, 
 check("episode mode: a repeated admission key stops even when admissions carry stay_form_primary",
       inherits(try(quiet(prepare_join_inputs(ea, dis)), silent = TRUE), "try-error"))
 
-cat("\n9. run_all.R on made-up files\n")
+cat("\n9. run_all.R and run_sample_maker.R on made-up files\n")
 tmp <- tempfile("runall_"); dir.create(file.path(tmp, "input_test"), recursive = TRUE)
-invisible(file.copy(file.path(ROOT, c("run_all.R", "config_sample_maker.R")), tmp))
+invisible(file.copy(file.path(ROOT, c("run_all.R", "run_sample_maker.R", "config_sample_maker.R")), tmp))
 invisible(file.copy(file.path(ROOT, "modules"), tmp, recursive = TRUE))
 cfg <- readLines(file.path(tmp, "config_sample_maker.R"))
 cfg <- sub('cleaning_pipeline_output_dir *= *"[^"]*"', 'cleaning_pipeline_output_dir = "input_test"', cfg)
@@ -185,14 +185,21 @@ put("zim_db_admissions_20240601", data.frame(uid = c("TEST-50", "TEST-51"), faci
                                              datetimeadmission = c("2024-03-01 10:00:00", "2024-06-01 10:00:00")))
 put("zim_db_discharges_20240601", data.frame(uid = c("TEST-50", "TEST-50"), facility = "H1",
                                              uniquekey = c("x1", "x2")))
-old_wd <- setwd(tmp)
-out <- suppressWarnings(system2(file.path(R.home("bin"), "Rscript"), "run_all.R", stdout = TRUE, stderr = TRUE))
+# Started from another folder, so the scripts must find their own folder.
+old_wd <- setwd(tempdir())
+rscript <- file.path(R.home("bin"), "Rscript")
+out <- suppressWarnings(system2(rscript, shQuote(file.path(tmp, "run_all.R")), stdout = TRUE, stderr = TRUE))
+out_sm <- suppressWarnings(system2(rscript, shQuote(file.path(tmp, "run_sample_maker.R")), stdout = TRUE, stderr = TRUE))
 setwd(old_wd)
 status <- attr(out, "status"); if (is.null(status)) status <- 0L
 check("a repeated uid + facility discharge key stops the join with the [dedup] message",
       any(grepl("[dedup] DISCHARGES: 1 match key(s) occur more than once", out, fixed = TRUE)) &&
         any(grepl("0/1 succeeded", out, fixed = TRUE)))
 check("run_all.R from Rscript exits with status 1 when a join fails", identical(as.integer(status), 1L))
+check("run_sample_maker.R started from another folder finds its folder and stops on the same key",
+      any(grepl(normalizePath(tmp), out_sm, fixed = TRUE)) &&
+        any(grepl("[dedup] DISCHARGES: 1 match key(s) occur more than once", out_sm, fixed = TRUE)) &&
+        identical(as.integer(attr(out_sm, "status")), 1L))
 check("no master file is written for the failed join",
       length(list.files(file.path(tmp, "outputs"), pattern = "master_joined", recursive = TRUE)) == 0)
 unlink(tmp, recursive = TRUE)

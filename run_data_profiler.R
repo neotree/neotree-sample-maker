@@ -78,12 +78,11 @@ local({
   if (length(args) >= 1 && nchar(trimws(args[1])) > 0) {
     p <- trimws(args[1])
     if (!file.exists(p)) {
-      p2 <- file.path(
-        dirname(normalizePath(commandArgs(trailingOnly = FALSE)[
-          grep("--file=", commandArgs(trailingOnly = FALSE))
-        ], mustWork = FALSE)),
+      script_flag <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
+      p2 <- if (length(script_flag) > 0)
+        file.path(dirname(normalizePath(sub("^--file=", "", script_flag[1]), mustWork = FALSE)), args[1])
+      else
         args[1]
-      )
       if (file.exists(p2)) p <- p2
     }
     if (!file.exists(p)) stop(sprintf("Input file not found: %s", args[1]))

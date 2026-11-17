@@ -2,6 +2,11 @@
 
 Releases are tagged in the repository.
 
+## [v2.0.3]
+
+- `run_all.R`, `run_sample_maker.R`, `run_anonymizer.R` and `run_data_profiler.R` now find their own folder when started with `Rscript` from another folder. Before, they kept the `--file=` prefix of the script path and worked with `Rscript` only when started from the `sample_maker_R` folder. RStudio was not affected.
+- `tests/test_episode_join.R` starts `run_all.R` and `run_sample_maker.R` from another folder.
+
 ## [v2.0.2]
 
 - `run_all.R` now creates the match keys before the duplicate check, as `run_sample_maker.R` already did. Before this, the duplicate check in `run_all.R` found no key column and removed nothing, and in episode mode the join stopped on repeated discharge keys. Files cleaned with the earlier duplicate removal have no repeated `uid` + facility keys, so master files built from them are not affected.

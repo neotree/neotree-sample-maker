@@ -50,10 +50,11 @@ cat("================================================================\n\n")
 # Determine the directory containing this script so relative paths in config.R
 # and the modules/ folder are resolved correctly regardless of working directory.
 script_dir <- tryCatch({
-  # Works when run via Rscript
-  dirname(normalizePath(commandArgs(trailingOnly = FALSE)[
-    grep("--file=", commandArgs(trailingOnly = FALSE))
-  ]))
+  script_flag <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
+  if (length(script_flag) > 0)
+    dirname(normalizePath(sub("^--file=", "", script_flag[1]), mustWork = FALSE))
+  else
+    NULL
 }, error = function(e) NULL)
 
 # Fallback: use the active RStudio source file path, or finally getwd()

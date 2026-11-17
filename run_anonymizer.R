@@ -101,9 +101,11 @@ ANONYMIZER_CONFIG <- list(
 
 # Resolve script directory
 script_dir <- tryCatch({
-  dirname(normalizePath(commandArgs(trailingOnly = FALSE)[
-    grep("--file=", commandArgs(trailingOnly = FALSE))
-  ]))
+  script_flag <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
+  if (length(script_flag) > 0)
+    dirname(normalizePath(sub("^--file=", "", script_flag[1]), mustWork = FALSE))
+  else
+    NULL
 }, error = function(e) NULL)
 
 if (is.null(script_dir) || length(script_dir) == 0) {
