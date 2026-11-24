@@ -33,6 +33,8 @@
 #     Numeric coercion is applied automatically when the value is numeric.
 #     Rows where the filter variable is NA are kept (not excluded).
 #     Applied to both master_joined and master_joined_extended.
+#     A filter on neotreeoutcome is applied to neotreeoutcome_dis when the
+#     master has it (admissions with their own neotreeoutcome column).
 #     When any filters are set, "_excl" is appended to the output label.
 #
 #   Column selection
@@ -44,6 +46,7 @@
 #     Columns that don't exist in the dataset (e.g. wrong name supplied) are
 #     reported as a warning; the rest are still applied.
 #     Column names must match exactly as they appear in the master file.
+#     Selecting neotreeoutcome also keeps neotreeoutcome_dis when it exists.
 #
 # FUNCTIONS EXPORTED
 #   run_subsample_maker(master_joined, master_joined_extended, cfg)
@@ -63,6 +66,14 @@
 #     *_na_coded.csv files are written alongside the standard outputs.
 #     Returns a named list of all output file paths.
 ################################################################################
+
+# The outcome is recorded on the discharge form. When admissions also have a
+# neotreeoutcome column, the master files hold the admission copy as
+# neotreeoutcome and the discharge outcome as neotreeoutcome_dis; a filter or
+# column selection naming neotreeoutcome then refers to neotreeoutcome_dis.
+.discharge_outcome_col <- function(var, cols) {
+  if (identical(var, "neotreeoutcome") && "neotreeoutcome_dis" %in% cols) "neotreeoutcome_dis" else var
+}
 
 # Columns always kept regardless of sub_variables setting
 SUBSAMPLE_ALWAYS_KEEP <- c(
@@ -419,9 +430,12 @@ run_subsample_maker <- function(master_joined, master_joined_extended, cfg) {
 
   for (i in seq_along(filters)) {
     f   <- filters[[i]]
-    var <- f$variable
+    var <- .discharge_outcome_col(f$variable, names(df))
     op  <- f$operator
     val <- f$value
+    if (!identical(var, f$variable))
+      cat(sprintf("[subsample]   Excl [%d]: %s is applied to the discharge outcome, %s\n",
+                  i, f$variable, var))
 
     if (!var %in% names(df)) {
       cat(sprintf("[subsample]   Excl [%d]: column '%s' not found in %s -- skipped\n",
@@ -517,6 +531,11 @@ run_subsample_maker <- function(master_joined, master_joined_extended, cfg) {
       resolved <- c(resolved, v)
     } else {
       not_found <- c(not_found, v)
+    }
+    dv <- .discharge_outcome_col(v, all_cols)
+    if (!identical(dv, v) && !dv %in% resolved) {
+      resolved <- c(resolved, dv)
+      cat(sprintf("[subsample]   %s selected: the discharge outcome %s is kept as well\n", v, dv))
     }
   }
 
@@ -819,9 +838,10 @@ write_subsample_outputs <- function(sub_result, cfg, prefix, out_dir,
     ""
   )
 
-  # [7] Outcome distributions
-  out_col <- if ("neotreeoutcome" %in% names(sj)) "neotreeoutcome" else
-             if ("neotreeoutcome_dis" %in% names(sj)) "neotreeoutcome_dis" else NULL
+  # [7] Outcome distributions. The outcome is recorded on the discharge form:
+  # neotreeoutcome_dis when admissions also have a neotreeoutcome column.
+  out_col <- if ("neotreeoutcome_dis" %in% names(sj)) "neotreeoutcome_dis" else
+             if ("neotreeoutcome" %in% names(sj)) "neotreeoutcome" else NULL
 
   if (!is.null(out_col)) {
     # subsample_joined: only rows with a discharge (direct_match)

@@ -73,8 +73,9 @@ Matching statistics report:
   Deduplication            Duplicate keys and rows removed, per file.
   Direct matching summary  Matched pairs, unmatched admissions, unmatched
                            discharges, as counts and percentages.
-  Neotree outcomes         Counts of the outcome column among direct matches,
-                           and direct matches by facility.
+  Neotree outcomes         Counts of the discharge outcome among direct
+                           matches (see README_joiner.txt), and direct
+                           matches by facility.
   Unmatched breakdown      Unmatched admissions and discharges by facility.
   Master dataset summary   Rows by match_type in both master datasets.
   Output files             Names of the files written.
@@ -90,8 +91,8 @@ Probabilistic matching report:
   One-to-one assignments   Pairs accepted and summary of their similarity.
   Per-variable scores      Mean and median score of each variable among the
                            accepted pairs.
-  Master_joined_extended   Rows by match_type and counts of the outcome
-                           column.
+  Master_joined_extended   Rows by match_type and counts of the discharge
+                           outcome.
   Top assignments          Up to 20 accepted pairs with their similarity and
                            the uid of the admission and of the discharge.
   Output files             Names of the files written.

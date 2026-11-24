@@ -174,9 +174,11 @@ join_data <- function(admissions, discharges) {
 # ------------------------------------------------------------------------------
 # Internal helpers
 # ------------------------------------------------------------------------------
+# The outcome is recorded on the discharge form. When admissions also have a
+# neotreeoutcome column, the discharge copy is neotreeoutcome_dis.
 .find_outcome_col <- function(df) {
-  if ("neotreeoutcome" %in% names(df))     return("neotreeoutcome")
   if ("neotreeoutcome_dis" %in% names(df)) return("neotreeoutcome_dis")
+  if ("neotreeoutcome" %in% names(df))     return("neotreeoutcome")
   return(NULL)
 }
 

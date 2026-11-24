@@ -109,6 +109,42 @@ dm <- nc$match_type == "direct_match"
 check("NA-coded values come from the right admission and discharge rows",
       all(nc$label[dm] == paste0(mj$label[dm], "-nc")) && all(nc$label_dis[dm] == paste0(mj$label_dis[dm], "-nc")))
 
+cat("\n5b. Outcome summary\n")
+check("no outcome column: the summary says so", is.null(quiet(join_data(ad$df, dd$df))$outcome_col))
+adm_oc <- ad$df; adm_oc$neotreeoutcome <- NA_character_
+dis_oc <- dd$df; dis_oc$neotreeoutcome <- dis_oc$outcome
+jo <- quiet(join_data(adm_oc, dis_oc))
+check("outcome summary uses the discharge copy when admissions also have neotreeoutcome",
+      jo$outcome_col == "neotreeoutcome_dis" && any(grepl("NND", jo$outcome_summary$lines, fixed = TRUE)))
+check("outcome summary uses neotreeoutcome when only discharges have it",
+      quiet(join_data(ad$df, dis_oc))$outcome_col == "neotreeoutcome")
+
+cat("\n5c. Subsamples: neotreeoutcome means the discharge outcome\n")
+sm <- data.frame(uid = c("TEST-60", "TEST-61", "TEST-62", "TEST-63"), facility = "H1",
+                 uniquekey = c("s1", "s2", "s3", "s4"), baby_id = paste0(c("TEST-60", "TEST-61", "TEST-62", "TEST-63"), ".A"),
+                 stay_no = 1L, datetimeadmission = "2024-03-01 10:00:00", match_type = "direct_match",
+                 neotreeoutcome = c("DC", NA, NA, "LAMA"), neotreeoutcome_dis = c("LAMA", "NND", "DC", "DC"),
+                 bw = c(2500, 2600, 2700, 2800), stringsAsFactors = FALSE)
+scfg <- list(sub_use_advanced_mode = FALSE, sub_start_date = NULL, sub_end_date = NULL, sub_facility_filter = NULL,
+             sub_exclusion_filters = list(list(variable = "neotreeoutcome", operator = "in", value = c("LAMA"))),
+             sub_variables = c("neotreeoutcome", "bw"),
+             master_joined_file = "TEST_master.csv", master_joined_extended_file = "TEST_master_extended.csv")
+sr <- quiet(run_subsample_maker(sm, sm, scfg))
+check("an exclusion filter on neotreeoutcome removes rows by the discharge outcome",
+      setequal(sr$subsample_joined$uniquekey, c("s2", "s3", "s4")))
+check("selecting neotreeoutcome also keeps neotreeoutcome_dis",
+      all(c("neotreeoutcome", "neotreeoutcome_dis") %in% names(sr$subsample_joined)))
+sdir <- tempfile("sub_"); dir.create(sdir)
+sp <- quiet(write_subsample_outputs(sr, scfg, "TEST", sdir))
+rep_txt <- readLines(sp$report)
+oc7 <- rep_txt[seq(grep("[7]  OUTCOME DISTRIBUTIONS", rep_txt, fixed = TRUE), length(rep_txt))]
+check("the subsample report counts the discharge outcome",
+      any(grepl("NND", oc7, fixed = TRUE)) && !any(grepl("LAMA", oc7, fixed = TRUE)))
+unlink(sdir, recursive = TRUE)
+mo <- sm; mo$neotreeoutcome_dis <- NULL; mo$neotreeoutcome <- c("LAMA", "NND", "DC", "DC")
+check("without neotreeoutcome_dis the filter reads neotreeoutcome",
+      setequal(quiet(run_subsample_maker(mo, mo, scfg))$subsample_joined$uniquekey, c("s2", "s3", "s4")))
+
 cat("\n6. Anonymization\n")
 an <- anonymize_dataset(mj, list())$df
 check("baby_id and the discharge copies of uid, uniquekey and baby_id are removed",

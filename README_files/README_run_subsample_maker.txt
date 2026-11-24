@@ -53,13 +53,16 @@ The same steps are applied to master_joined and to master_joined_extended.
    Rows where the variable is missing are kept. When the filter value is a
    number the column is compared as numbers, otherwise as text. A filter on a
    column that does not exist is skipped and reported. An unknown operator
-   stops the run.
+   stops the run. A filter on neotreeoutcome is applied to the discharge
+   outcome, neotreeoutcome_dis, when the master has it (Zimbabwe admissions
+   carry their own, mostly empty, neotreeoutcome column).
 
 4. Column selection. With sub_variables set, the output keeps those columns
    and the columns uid, facility, uniquekey, datetimeadmission, baby_id,
    stay_no, match_key, adm_date_parsed, match_type and prob_match_similarity
    (those present), in their original order. Requested names that do not
-   exist are reported and skipped.
+   exist are reported and skipped. Selecting neotreeoutcome also keeps
+   neotreeoutcome_dis when it exists.
 
 5. Matched-only files. subsample_master_matched_only is the direct_match rows
    of the master subsample; subsample_master_extended_matched_only is the
@@ -87,7 +90,8 @@ before _master_joined.
 The report lists the input files, the filter, rows kept and dropped with a
 breakdown by match_type, the rows removed by each exclusion filter, the column
 selection, counts by facility, the matched-only counts, the distribution of
-neotreeoutcome among matched rows, and the output files.
+the discharge outcome among matched rows (neotreeoutcome_dis when admissions
+also have a neotreeoutcome column), and the output files.
 
 
 CLEANED MODE  (source_type = "cleaned")

@@ -2,6 +2,12 @@
 
 Releases are tagged in the repository.
 
+## [v2.0.4]
+
+- The outcome counts in the matching statistics report, the probabilistic matching report and the subsample report now read the discharge outcome. When admissions also have a `neotreeoutcome` column (Zimbabwe), the reports read `neotreeoutcome_dis`; before, they read the admissions column, which is almost always empty. The master files are not affected.
+- Subsamples: an exclusion filter on `neotreeoutcome` is applied to `neotreeoutcome_dis` when the master has it, and selecting `neotreeoutcome` also keeps `neotreeoutcome_dis`. Before, on Zimbabwe masters, an outcome filter such as LAMA read the admissions column and removed almost nothing.
+- `tests/test_episode_join.R` checks which outcome column the reports use and runs a subsample with conflicting admission and discharge outcomes.
+
 ## [v2.0.3]
 
 - `run_all.R`, `run_sample_maker.R`, `run_anonymizer.R` and `run_data_profiler.R` now find their own folder when started with `Rscript` from another folder. Before, they kept the `--file=` prefix of the script path and worked with `Rscript` only when started from the `sample_maker_R` folder. RStudio was not affected.

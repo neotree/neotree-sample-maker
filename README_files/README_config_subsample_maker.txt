@@ -74,9 +74,14 @@ Both modes
                            list(variable = , operator = , value = ).
                            Rows that meet a condition are removed. Operators:
                            <, <=, >, >=, ==, !=, in, not_in. value may be a
-                           vector for in and not_in.
+                           vector for in and not_in. A filter on
+                           neotreeoutcome uses neotreeoutcome_dis (the
+                           discharge outcome) when it exists; in master
+                           subsamples neotreeoutcome always means the
+                           discharge outcome.
   sub_variables            NULL keeps all columns. A character vector keeps
-                           those columns and the mandatory ones.
+                           those columns and the mandatory ones. Selecting
+                           neotreeoutcome also keeps neotreeoutcome_dis.
 
   Master mode filters on the admission date. Cleaned mode filters each type
   on its own date_column.

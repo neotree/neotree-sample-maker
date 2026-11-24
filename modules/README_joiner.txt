@@ -30,8 +30,9 @@ WHAT IT DOES
    discharge with the same match_key. A discharge column whose name also
    exists in admissions gets the suffix _dis. match_key appears once.
 4. Counts the values of the outcome column among the matched pairs, and the
-   matched pairs by facility, for the statistics report. The outcome column is
-   neotreeoutcome, or neotreeoutcome_dis if the first is absent.
+   matched pairs by facility, for the statistics report. The outcome is taken
+   from the discharge form: neotreeoutcome_dis when admissions also have a
+   neotreeoutcome column, otherwise neotreeoutcome.
 
 
 INPUTS

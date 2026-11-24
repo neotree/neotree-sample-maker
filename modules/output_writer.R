@@ -550,8 +550,7 @@ write_outputs <- function(cfg, ps) {
       character(1))
 
     # Outcomes in master_joined_extended
-    outcome_col <- if ("neotreeoutcome" %in% names(mje)) "neotreeoutcome" else
-                   if ("neotreeoutcome_dis" %in% names(mje)) "neotreeoutcome_dis" else NULL
+    outcome_col <- .find_outcome_col(mje)
     out_lines <- if (!is.null(outcome_col)) {
       ot    <- sort(table(mje[[outcome_col]], useNA = "ifany"), decreasing = TRUE)
       n_ot  <- sum(ot)
