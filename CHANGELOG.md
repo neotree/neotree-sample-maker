@@ -2,6 +2,10 @@
 
 Releases are tagged in the repository.
 
+## [v2.0.5]
+
+- The user dictionaries in `user_dictionaries/` (used by `run_subsample_user_dict.R`) are updated from cleaning pipeline v2.0.3. They now list the HIV and syphilis clinical fields that the cleaning pipeline keeps in both countries, including the PHC files, and the Malawi admissions columns `antenatalcare_source` and `antenatalcare_category`.
+
 ## [v2.0.4]
 
 - The outcome counts in the matching statistics report, the probabilistic matching report and the subsample report now read the discharge outcome. When admissions also have a `neotreeoutcome` column (Zimbabwe), the reports read `neotreeoutcome_dis`; before, they read the admissions column, which is almost always empty. The master files are not affected.

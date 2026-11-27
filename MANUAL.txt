@@ -5,7 +5,7 @@
   A single-file compilation of every documentation file shipped with the
   Neotree Sample Maker.
 
-  Version   : 2.0.4  (see CHANGELOG.md)
+  Version   : 2.0.5  (see CHANGELOG.md)
   Source    : the README and documentation files in this repository,
               reproduced here in full.
 
